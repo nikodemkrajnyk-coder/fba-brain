@@ -1,0 +1,30 @@
+{
+  "name": "fba-brain",
+  "version": "3.0.0",
+  "description": "FBA Brain - Amazon UK Arbitrage Engine",
+  "main": "desktop.js",
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron .",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.fbabrain.app",
+    "productName": "FBA Brain",
+    "win": { "target": "nsis", "icon": "public/icon-512.png" },
+    "mac": { "target": "dmg", "icon": "public/icon-512.png" },
+    "files": ["**/*", "!node_modules/.cache"]
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^131.0.0",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}

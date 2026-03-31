@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FBA Brain">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>FBA Brain</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--bdr:#21262d;--acc:#58a6ff;--grn:#3fb950;--red:#f85149;--org:#d29922;--txt:#e6edf3;--mut:#8b949e;--sub:#30363d}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:'Outfit',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.hdr{background:var(--card);border-bottom:1px solid var(--bdr);padding:12px 16px 0;position:sticky;top:0;z-index:10}
+.tabs{display:flex}.tab{flex:1;padding:9px 0;background:0;border:0;border-bottom:2px solid transparent;color:var(--mut);font:600 11px/1 'Outfit';cursor:pointer}.tab.on{color:var(--txt);border-color:var(--acc)}
+.ct{padding:10px 14px;max-width:540px;margin:0 auto}
+.cd{background:var(--card);border-radius:12px;border:1px solid var(--bdr);margin-bottom:8px;overflow:hidden}
+.cd.ok{border-color:rgba(63,185,80,.4)}.cd.skip{opacity:.3}
+.bn{padding:8px 12px;border-bottom:1px solid var(--bdr);font:600 11px/1.3 'Outfit'}
+.bn.g{background:rgba(63,185,80,.06);color:var(--grn)}.bn.r{background:rgba(248,81,73,.06);color:var(--red)}.bn.y{background:rgba(210,153,34,.06);color:var(--org)}
+.dh{padding:10px 12px;cursor:pointer}
+.dt{font:700 14px/1.3 'Outfit'}.rv{font-size:10px;color:var(--org);margin-top:2px}
+.mx{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:6px}
+.m{background:var(--bg);border-radius:7px;padding:6px 4px;text-align:center}
+.ml{font:600 8px/1 'Outfit';color:var(--mut);letter-spacing:.5px}.mv{font:700 15px/1.2 'IBM Plex Mono'}
+.pl{font:700 9px/1 'Outfit';padding:2px 8px;border-radius:4px;display:inline-block}
+.det{padding:0 12px 12px;border-top:1px solid var(--bdr)}
+.nb{background:var(--bg);border-radius:7px;padding:8px;font:400 11px/1.6 'Outfit';color:var(--mut);border-left:3px solid var(--acc);margin:6px 0}
+.ct2{background:var(--bg);border-radius:7px;padding:8px;margin:6px 0}
+.cr{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid var(--bdr);font-size:10px}
+.cr .l{color:var(--mut)}.cr .v{font:600 10px 'IBM Plex Mono'}
+.dm{background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:10px;margin:6px 0}
+.dm-t{font:700 10px 'Outfit';color:var(--acc);letter-spacing:.5px;margin-bottom:6px}
+.dm-r{font:400 10px/1.5 'Outfit';color:var(--mut);padding-left:6px;border-left:2px solid rgba(88,166,255,.2);margin-bottom:3px}
+.sr{background:var(--bg);border-radius:6px;padding:6px 8px;margin:2px 0;display:flex;justify-content:space-between;align-items:center}
+.sr a{color:var(--acc);text-decoration:none;font:600 11px 'Outfit'}
+.bt{padding:10px 14px;border-radius:8px;font:700 12px 'Outfit';cursor:pointer;border:1.5px solid transparent;width:100%;text-align:center;display:block}
+.bt-a{background:var(--acc);color:#fff;border-color:var(--acc);text-decoration:none}
+.bt-g{background:0;color:var(--grn);border-color:var(--grn)}.bt-g.on{background:var(--grn);color:#fff}
+.bt-s{background:0;color:var(--mut);border-color:var(--bdr)}.bt-s.on{background:rgba(248,81,73,.15);color:var(--red);border-color:var(--red)}
+.bt-o{background:0;border:1px solid var(--bdr);color:var(--acc)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.warn{font:500 9px/1.4 'Outfit';padding:5px 8px;border-radius:5px;margin:3px 0}
+.w-g{background:rgba(63,185,80,.06);color:var(--grn)}.w-y{background:rgba(210,153,34,.06);color:var(--org)}.w-r{background:rgba(248,81,73,.06);color:var(--red)}
+.rsk{font:400 9px/1.4 'Outfit';color:var(--org);padding-left:6px;border-left:2px solid rgba(210,153,34,.3);margin-bottom:2px}
+.inp{width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--bdr);border-radius:7px;color:var(--txt);font:400 13px 'Outfit';outline:0}
+.empty{text-align:center;padding:30px;color:var(--mut);font-size:12px}
+.bar{height:4px;background:var(--sub);border-radius:2px;overflow:hidden;margin:4px 0}.bar-f{height:100%;border-radius:2px}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--sub);border-radius:2px;outline:0;margin:6px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--acc)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+  <div><div style="font:800 18px 'Outfit';letter-spacing:-.5px">FBA Brain</div><div id="status" style="font:400 9px 'Outfit';color:var(--mut)">Loading...</div></div>
+  <div style="text-align:right"><div id="budgetN" style="font:800 22px 'IBM Plex Mono';color:var(--grn)">£200</div></div>
+ </div>
+ <input type="range" id="budgetR" min="100" max="2000" step="50" value="200">
+ <div class="tabs">
+  <button class="tab on" data-t="deals">Deals</button>
+  <button class="tab" data-t="alerts" id="atab">Alerts</button>
+  <button class="tab" data-t="stock">Stock</button>
+  <button class="tab" data-t="setup">Setup</button>
+ </div>
+</div>
+
+<div class="ct" id="main"></div>
+
+<script>
+let S={deals:[],inventory:[],alerts:[],budget:200},D={},EX=null,TAB='deals';
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');TAB=t.dataset.t;render();
+});
+
+const sl=document.getElementById('budgetR');
+sl.oninput=()=>{S.budget=+sl.value;document.getElementById('budgetN').textContent='£'+S.budget;render();
+  fetch('/api/budget',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget:S.budget})});};
+
+async function load(){
+  try{
+    const r=await fetch('/api/state');S=await r.json();
+    sl.value=S.budget||200;document.getElementById('budgetN').textContent='£'+(S.budget||200);
+    document.getElementById('status').textContent=S.lastGmailCheck?'📧 '+new Date(S.lastGmailCheck).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · auto/2min':'📧 Waiting...';
+    document.getElementById('atab').textContent='Alerts'+((S.alerts||[]).length?' ('+S.alerts.length+')':'');
+    render();
+  }catch(e){document.getElementById('main').innerHTML='<div class="empty">Cannot connect to server</div>';}
+}
+
+function render(){
+  const el=document.getElementById('main');
+  if(TAB==='deals')renderDeals(el);
+  else if(TAB==='alerts')renderAlerts(el);
+  else if(TAB==='stock')renderStock(el);
+  else renderSetup(el);
+}
+
+function renderDeals(el){
+  const deals=S.deals||[];
+  let h=`<div class="g2" style="margin-bottom:8px">
+    <button class="bt bt-o" onclick="doScan()">🔍 Scan now</button>
+    <button class="bt bt-o" onclick="doGmail()" style="color:#ea4335">📧 Check Gmail</button>
+  </div>`;
+
+  if(!deals.length) h+='<div class="empty">No deals yet. Scan or wait for Gmail alerts.</div>';
+
+  deals.forEach((d,i)=>{
+    const dc=D[i],ok=d.profitable,np=d.needsPrice;
+    const scC=d.score>=70?'var(--grn)':d.score>=45?'var(--org)':'var(--red)';
+    const bnC=!ok?'r':d.demand?.level==='skip'?'r':d.demand?.level==='caution'?'y':'g';
+    const cls=dc==='BUY'?'ok':dc==='PASS'?'skip':'';
+
+    h+=`<div class="cd ${cls}">
+      <div class="bn ${bnC}">${d.rec||'Analysing...'}</div>
+      <div class="dh" onclick="EX=EX===${i}?null:${i};render()">
+        <div style="display:flex;justify-content:space-between">
+          <div style="flex:1"><div class="dt">${d.name||'Unknown'}</div>${d.reviews?'<div class="rv">★ '+d.reviews+'</div>':''}</div>
+          <div class="pl" style="background:${scC}20;color:${scC};font-size:16px;font-family:'IBM Plex Mono';padding:4px 9px">${d.score||0}</div>
+        </div>
+        <div class="mx">
+          <div class="m"><div class="ml">BUY</div><div class="mv" style="color:${np?'var(--org)':'var(--acc)'}">${np?'???':'£'+(d.buyPrice||0).toFixed(2)}</div></div>
+          <div class="m"><div class="ml">SELL</div><div class="mv" style="color:var(--org)">£${(d.sellPrice||0).toFixed(2)}</div></div>
+          <div class="m"><div class="ml">PROFIT</div><div class="mv" style="color:${ok?'var(--grn)':'var(--red)'}">${np?'—':'£'+(d.pr||0).toFixed(2)}</div></div>
+        </div>
+      </div>`;
+
+    if(EX===i){
+      h+=`<div class="det">`;
+
+      // DEMAND PROOF
+      if(d.demand){
+        h+=`<div class="dm"><div class="dm-t">📊 DEMAND PROOF</div>`;
+        (d.demand.reasons||[]).forEach(r=>{h+=`<div class="dm-r">${r}</div>`;});
+        if(d.confirmedSales90d) h+=`<div class="dm-r">🔢 ${d.confirmedSales90d}+ confirmed sales in 90 days (BSR drops)</div>`;
+        if(d.timeToSell) h+=`<div class="dm-r">⏱ Your ${d.u||0} units should sell in ~${d.timeToSell} month(s)</div>`;
+        h+=`</div>`;
+      }
+
+      // Note
+      if(d.note) h+=`<div class="nb">${d.note}</div>`;
+
+      // Buy price input (if needs verification)
+      if(np){
+        h+=`<div style="background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:8px;padding:10px;margin:6px 0">
+          <div style="font:700 11px 'Outfit';color:var(--org);margin-bottom:6px">⚠️ BUY PRICE NEEDED — check sources below, then enter:</div>
+          <div class="g2">
+            <input class="inp" id="bp${i}" type="number" step="0.01" placeholder="Buy price £">
+            <button class="bt bt-a" style="padding:9px" onclick="setPrice(${i})">Set price</button>
+          </div>
+        </div>`;
+      }
+
+      // Cost breakdown (only if buy price set)
+      if(!np && d.amz){
+        h+=`<div class="ct2"><div style="font:700 9px 'Outfit';color:var(--acc);letter-spacing:.5px;margin-bottom:3px">COST PER UNIT</div>`;
+        [['Product',d.buyPrice],['Label',d.prep?.l],
+         ...(d.prep?.p>0?[['Wrap',d.prep.p]]:[]),['Box',d.prep?.b],
+         [`Ref ${d.amz.rr}`,d.amz.rf],[`FBA ${(d.weightKg||0.3)}kg`,d.amz.ff],['Storage',d.amz.sf]
+        ].forEach(([l,v])=>{h+=`<div class="cr"><span class="l">${l}</span><span class="v">£${(v||0).toFixed(2)}</span></div>`;});
+        h+=`<div style="margin-top:4px">
+          <div class="cr"><span class="l" style="color:var(--red);font-weight:700">Total</span><span class="v" style="color:var(--red);font-size:12px">£${(d.tc||0).toFixed(2)}</span></div>
+          <div class="cr"><span class="l" style="color:var(--org);font-weight:700">Sell</span><span class="v" style="color:var(--org);font-size:12px">£${(d.sellPrice||0).toFixed(2)}</span></div>
+          <div style="height:1px;background:var(--bdr);margin:3px 0"></div>
+          <div style="display:flex;justify-content:space-between"><span style="font:800 14px 'Outfit';color:${ok?'var(--grn)':'var(--red)'}">PROFIT</span><span style="font:800 18px 'IBM Plex Mono';color:${ok?'var(--grn)':'var(--red)'}">£${(d.pr||0).toFixed(2)}</span></div>
+        </div></div>`;
+
+        h+=`<div class="warn w-g">£${S.budget} → ${d.u} units → £${(d.bpr||0).toFixed(2)} profit · ${d.roi}% ROI · ~${d.timeToSell||'?'}mo to sell</div>`;
+      }
+
+      // Sources
+      if(d.sources?.length){
+        h+=`<div style="font:700 9px 'Outfit';color:var(--acc);letter-spacing:.5px;margin:8px 0 4px">🌍 FIND CHEAPEST SOURCE (${d.sources.length} sites)</div>`;
+        (d.sources||[]).forEach(s=>{
+          h+=`<div class="sr"><div><span style="font-size:12px">${s.region}</span> <a href="${s.url}" target="_blank">${s.name} ↗</a></div><span style="font:500 9px 'Outfit';color:var(--mut)">${s.ship} · ${s.days}d</span></div>`;
+        });
+      }
+
+      // Risks
+      if(d.risks?.length){(d.risks||[]).forEach(r=>{h+=`<div class="rsk">⚠ ${r}</div>`;});}
+
+      // Amazon link
+      if(d.amzUrl) h+=`<a href="${d.amzUrl}" target="_blank" style="display:block;text-align:center;padding:7px;margin:6px 0;border:1px solid var(--bdr);border-radius:6px;color:var(--mut);font:600 10px 'Outfit';text-decoration:none">View on Amazon UK ↗</a>`;
+
+      // Approve / Skip
+      if(!np){
+        h+=`<div class="g2" style="margin-top:6px">
+          <button class="bt bt-g ${dc==='BUY'?'on':''}" onclick="decide(${i},'BUY')">${dc==='BUY'?'✓ Approved':'Approve'}</button>
+          <button class="bt bt-s ${dc==='PASS'?'on':''}" onclick="decide(${i},'PASS')">${dc==='PASS'?'✗ Skipped':'Skip'}</button>
+        </div>`;
+      }
+
+      if(d.src) h+=`<div style="font:400 8px 'Outfit';color:var(--sub);margin-top:4px">📊 ${d.src}</div>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  });
+  el.innerHTML=h;
+}
+
+function renderAlerts(el){
+  const a=S.alerts||[];
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;margin-bottom:6px">
+    <span style="font:400 10px 'Outfit';color:var(--mut)">${S.lastGmailCheck?'Last: '+new Date(S.lastGmailCheck).toLocaleTimeString('en-GB'):'Not checked'}</span>
+    <span style="font:500 10px 'Outfit';color:var(--grn)">Auto: every 2 min</span>
+  </div>
+  <button class="bt bt-o" onclick="doGmail()" style="color:#ea4335;margin-bottom:10px">📧 Check now</button>`;
+  if(!a.length) h+='<div class="empty">No alerts yet. Set Tactical Arbitrage to email your Gmail.</div>';
+  else a.forEach(x=>{
+    h+=`<div class="cd" style="padding:10px">
+      <div style="font:700 12px 'Outfit';margin-bottom:2px">${x.subject||'Alert'}</div>
+      <div style="font:400 10px 'Outfit';color:var(--mut)">${x.from||''}</div>
+      ${x.snippet?'<div style="font:400 11px/1.5 Outfit;margin-top:4px">'+x.snippet+'</div>':''}
+      ${x.date?'<div style="font:400 9px Outfit;color:var(--sub);margin-top:2px">'+x.date+'</div>':''}
+    </div>`;
+  });
+  el.innerHTML=h;
+}
+
+function renderStock(el){
+  const inv=S.inventory||[];
+  let h='<div style="font:700 14px Outfit;margin-bottom:8px">Inventory</div>';
+  if(!inv.length) h+='<div class="empty">No stock yet. Approve a deal to track it here.</div>';
+  else{
+    inv.forEach(i=>{
+      const d=i.days||0,lv=i.surcharge?.level||'safe';
+      const c=lv==='safe'?'var(--grn)':lv==='caution'?'var(--org)':'var(--red)';
+      const pct=Math.min((d/365)*100,100);
+      h+=`<div class="cd" style="padding:10px;border-color:${c}40">
+        <div style="display:flex;justify-content:space-between"><div>
+          <div style="font:700 12px Outfit">${i.name}</div>
+          <div style="font:400 10px Outfit;color:var(--mut)">${i.units} units · £${(i.buyPrice||0).toFixed(2)}/ea · ${i.status}</div>
+        </div><div style="font:800 18px 'IBM Plex Mono';color:${c}">${d}d</div></div>
+        <div class="bar"><div class="bar-f" style="width:${pct}%;background:${c}"></div></div>
+        <div style="font:500 9px Outfit;color:${c}">${i.surcharge?.msg||''}</div>
+      </div>`;
+    });
+    h+=`<div class="cd" style="padding:10px"><div style="font:700 10px Outfit;color:var(--acc);margin-bottom:4px">STORAGE FEES (UK 2026)</div>
+      ${[['0-270d','£0.78/ft³','var(--grn)'],['271-300d','+£2.32','var(--org)'],['301-365d','+£2.48','var(--red)'],['365d+','+£5.71','var(--red)']].map(([p,f,c])=>
+        `<div class="cr"><span class="l">${p}</span><span class="v" style="color:${c}">${f}</span></div>`).join('')}
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+function renderSetup(el){
+  el.innerHTML=`
+    <div class="cd" style="padding:14px"><div style="font:700 14px Outfit;margin-bottom:8px">Connected</div>
+    ${[['Gmail',S.gmail?'✅ Active — checks /2min':'❌ Not set',S.gmail?'var(--grn)':'var(--red)'],
+       ['Keepa API',S.keepa?'✅ Connected':'❌ Add key in .env',S.keepa?'var(--grn)':'var(--red)'],
+       ['Fees Engine','✅ 2026 UK rates','var(--grn)'],['Prep Rates','✅ UK published','var(--grn)'],
+       ['Demand Engine','✅ BSR + sales estimation','var(--grn)'],['Auto Scanner','✅ Every 6 hours','var(--grn)'],
+       ['Stock Tracker','✅ Daily checks','var(--grn)'],
+       ['Sources','✅ ${(S.sources||[]).length} global sites','var(--grn)'],
+    ].map(([n,s,c])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font:600 12px Outfit">${n}</span><span class="pl" style="background:${c}20;color:${c}">${s}</span>
+    </div>`).join('')}</div>
+    <div class="cd" style="padding:14px"><div style="font:700 14px Outfit;margin-bottom:8px">Setup (.env file)</div>
+    <div style="background:var(--bg);border-radius:6px;padding:10px;font:500 11px 'IBM Plex Mono';color:var(--mut);line-height:1.8">
+      KEEPA_API_KEY=your_key<br>GMAIL_CLIENT_ID=your_id<br>GMAIL_CLIENT_SECRET=your_secret<br>GMAIL_REFRESH_TOKEN=your_token
+    </div></div>
+    <div class="cd" style="padding:14px"><div style="font:700 14px Outfit;margin-bottom:8px">Subscriptions</div>
+    ${[['Amazon Seller UK','£25/mo','https://sellercentral.amazon.co.uk'],
+       ['Keepa','€19/mo','https://keepa.com'],['Tactical Arbitrage','~£77/mo','https://tacticalarbitrage.com'],
+       ['Prep Centre','~£0.50/unit','https://prep365.co.uk']
+    ].map(([n,c,u])=>`<a href="${u}" target="_blank" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr);text-decoration:none">
+      <span style="font:600 12px Outfit;color:var(--txt)">${n} ↗</span><span style="font:700 12px 'IBM Plex Mono';color:var(--grn)">${c}</span>
+    </a>`).join('')}</div>
+    <div class="cd" style="padding:14px"><div style="font:700 14px Outfit;margin-bottom:6px">Activity Log</div>
+    ${(S.log||[]).slice(0,15).map(l=>`<div style="font:400 9px 'IBM Plex Mono';color:var(--mut);padding:2px 0;border-bottom:1px solid var(--bdr)">${l}</div>`).join('')}
+    </div>`;
+}
+
+// Actions
+async function doGmail(){try{await fetch('/api/gmail/check',{method:'POST'});await load();}catch(e){}}
+async function doScan(){try{await fetch('/api/scan',{method:'POST'});setTimeout(load,5000);}catch(e){}}
+function decide(i,d){D[i]=d;if(d==='BUY')fetch('/api/approve/'+i,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(load);render();}
+async function setPrice(i){
+  const v=parseFloat(document.getElementById('bp'+i).value);
+  if(!v||v<=0)return;
+  const deal=S.deals[i];
+  await fetch('/api/deals/'+deal.id+'/price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buyPrice:v})});
+  await load();
+}
+
+load();
+setInterval(load,30000);
+
+// Register PWA service worker
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').then(()=>console.log('PWA ready'));}
+</script>
+</body>
+</html>
