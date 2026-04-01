@@ -10,7 +10,9 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const DATA = path.join(__dirname, 'data', 'state.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA = path.join(DATA_DIR, 'state.json');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 function load() { try { if (fs.existsSync(DATA)) return JSON.parse(fs.readFileSync(DATA,'utf8')); } catch(e){} return {deals:[],inventory:[],alerts:[],processed:[],budget:200,log:[]}; }
 function save(s) { try { fs.writeFileSync(DATA, JSON.stringify(s,null,2)); } catch(e){} }
 let S = load();
@@ -618,6 +620,7 @@ app.post('/api/deals/:id/price', (req,res)=>{
 });
 
 app.get('/api/lookup/:asin', async(req,res)=>{
+  if (!/^[A-Z0-9]{10}$/.test(req.params.asin)) return res.status(400).json({error:'Invalid ASIN'});
   const k = await keepa(req.params.asin);
   if(!k) return res.json({error:'Not found'});
   const sp=parseFloat(k.price||k.buyBox||0);
@@ -652,6 +655,7 @@ app.post('/api/scan', async(req,res)=>{ autoScan(); res.json({msg:'Started'}); }
 
 // Quality check for a product
 app.get('/api/quality/:asin', async(req,res)=>{
+  if (!/^[A-Z0-9]{10}$/.test(req.params.asin)) return res.status(400).json({error:'Invalid ASIN'});
   const k = await keepa(req.params.asin);
   if(!k) return res.json({error:'Not found'});
   const quality = assessQuality({
@@ -783,5 +787,9 @@ app.listen(PORT, ()=>{
   console.log(`   📝 Listing Generator: Auto-titles, bullets, description, keywords`);
   console.log(`   💰 Tax: Income tax + NI + VAT threshold tracker`);
   console.log(`   🌍 ${SOURCES.length} global sources configured\n`);
-  if(!S.deals?.length) fetch(`http://localhost:${PORT}/api/seed`,{method:'POST'}).catch(()=>{});
+  if(!S.deals?.length) { S.deals=[
+    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,confirmedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ confirmed sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
+    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,confirmedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ confirmed sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
+    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,confirmedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ confirmed sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
+  ]; save(S); log('Seeded 3 starter deals'); }
 });
