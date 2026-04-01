@@ -1,6 +1,6 @@
 {
   "name": "fba-brain",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "FBA Brain - Amazon UK Arbitrage Engine",
   "main": "desktop.js",
   "scripts": {
