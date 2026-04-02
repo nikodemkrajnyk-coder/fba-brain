@@ -822,6 +822,98 @@ app.post('/api/inventory/:id/return', (req,res)=>{
 app.post('/api/gmail/check', async(req,res)=>res.json(await checkGmail()));
 app.post('/api/scan', async(req,res)=>{ autoScan(); res.json({msg:'Started'}); });
 
+// ═══════════════════════════════════════
+// QUICK ASIN SCAN (for iPhone in-store scanning)
+// Paste/type an ASIN → get full deal analysis instantly
+// ═══════════════════════════════════════
+app.post('/api/quick-scan', async(req,res)=>{
+  const asin = (req.body.asin||'').toUpperCase().trim();
+  if (!/^[A-Z0-9]{10}$/.test(asin)) return res.status(400).json({error:'Invalid ASIN format'});
+  const buyPrice = req.body.buyPrice ? parseFloat(req.body.buyPrice) : null;
+  const source = req.body.source || '';
+
+  // Check if we already have this deal
+  const existing = (S.deals||[]).find(d=>d.asin===asin);
+  if (existing && !buyPrice) return res.json({existing: true, deal: analyse(existing, S.budget||200)});
+
+  const k = await keepa(asin);
+  if (!k || !k.price) return res.json({error:'Product not found on Amazon UK or no price data'});
+
+  const sp = parseFloat(k.price);
+  const deal = {
+    id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
+    buyPrice: buyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+    brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
+    priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
+    reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
+    bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
+    reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
+    from: source || 'Quick scan', sources: getSources(k.title),
+    amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
+    note: `Quick scan. £${sp} Amazon. BSR #${k.bsr||'?'}.${k.sellerCount?' '+k.sellerCount+' sellers.':''}`,
+    risks: buyPrice ? [] : ['Buy price not set — enter what you can buy it for'],
+    src: `Quick scan (${new Date().toLocaleDateString('en-GB')})`,
+    autoFound: false, needsPrice: !buyPrice,
+  };
+
+  // Auto-add to deals
+  S.deals = S.deals||[];
+  S.deals.unshift(deal);
+  save(S);
+  log(`🔍 Scanned: ${k.title} — £${sp} Amazon, BSR #${k.bsr}`);
+
+  const result = analyse(deal, S.budget||200);
+  res.json({deal: result, added: true});
+});
+
+// ═══════════════════════════════════════
+// PRICE MONITOR — check if competitors undercut your inventory
+// ═══════════════════════════════════════
+async function checkPrices() {
+  if (!process.env.KEEPA_API_KEY) return;
+  const inv = S.inventory || [];
+  const alerts = [];
+  for (const item of inv) {
+    if (!item.asin) continue;
+    if (item.sold >= item.units) continue; // fully sold
+    try {
+      const k = await keepa(item.asin);
+      if (!k || !k.price) continue;
+      const currentPrice = parseFloat(k.price);
+      const yourPrice = item.sellPrice || 0;
+      const priceDiff = parseFloat(((yourPrice - currentPrice) / yourPrice * 100).toFixed(0));
+
+      if (currentPrice < yourPrice * 0.95) {
+        // Price dropped more than 5%
+        const alert = `Price drop on "${item.name}": £${yourPrice.toFixed(2)} → £${currentPrice.toFixed(2)} (${priceDiff}%)`;
+        log(`🔴 ${alert}`);
+        alerts.push({ type: 'price_drop', item: item.name, asin: item.asin, was: yourPrice, now: currentPrice, diff: priceDiff });
+        // Update the sell price
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = alert;
+      } else if (currentPrice > yourPrice * 1.05) {
+        // Price went up — opportunity to raise yours
+        const alert = `Price up on "${item.name}": £${yourPrice.toFixed(2)} → £${currentPrice.toFixed(2)} (+${Math.abs(priceDiff)}%)`;
+        log(`🟢 ${alert}`);
+        alerts.push({ type: 'price_up', item: item.name, asin: item.asin, was: yourPrice, now: currentPrice, diff: priceDiff });
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = alert;
+      } else {
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = null;
+      }
+      await new Promise(r=>setTimeout(r,2000));
+    } catch(e) { log('Price check error: '+e.message); }
+  }
+  if (alerts.length) save(S);
+  return alerts;
+}
+
+// Run price check every 4 hours
+cron.schedule('30 */4 * * *', ()=>{ log('💰 Price check...'); checkPrices(); });
+
+app.post('/api/price-check', async(req,res)=>{ const a = await checkPrices(); res.json({alerts:a, msg:`${a.length} price changes found`}); });
+
 // Quality check for a product
 app.get('/api/quality/:asin', async(req,res)=>{
   if (!/^[A-Z0-9]{10}$/.test(req.params.asin)) return res.status(400).json({error:'Invalid ASIN'});
