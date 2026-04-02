@@ -812,7 +812,7 @@ app.post('/api/approve/:index', (req,res)=>{
   S.inventory.push({id:Date.now(),name:deal.name,units,
     buyPrice:deal.buyPrice,sellPrice:deal.sellPrice,weightKg:deal.weightKg,
     dateSent:new Date().toISOString(),status:'ordered',asin:deal.asin,
-    category:deal.category,from:deal.from,buyUrl:deal.buyUrl});
+    category:deal.category,reviewCount:deal.reviewCount,from:deal.from,buyUrl:deal.buyUrl});
   // Update deal status
   deal.status = 'ordered';
   log(`📦 Ordered: ${deal.name} × ${units} units`);
