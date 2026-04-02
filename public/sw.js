@@ -1,4 +1,4 @@
-const CACHE = 'fba-brain-v15';
+const CACHE = 'fba-brain-v16';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

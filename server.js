@@ -437,9 +437,24 @@ function analyse(d, budget) {
   const nationalInsurance = parseFloat((adjustedBatchProfit * effectiveNIRate).toFixed(2));
   const netAfterTax = parseFloat((adjustedBatchProfit - incomeTax - nationalInsurance).toFixed(2));
 
-  // Combined score: profit (25%) + demand (30%) + quality (25%) + competition (20%)
+  // NEW: Lifecycle assessment — is this product growing or dying?
+  const lifecycle = assessLifecycle(d);
+
+  // NEW: Profit velocity — £/day not just £/unit
+  const velocity = calcProfitVelocity(pr, salesEst, u);
+
+  // NEW: Buy Box win rate
+  const buyBox = estimateBuyBoxWinRate(d);
+
+  // NEW: Review sentiment
+  const reviewSentiment = assessReviewSentiment(d);
+
+  // Combined score: profit (20%) + demand (25%) + quality (20%) + competition (15%) + lifecycle (10%) + velocity (10%)
   const profitScore = Math.min(Math.round(Math.min(mg*1.2,40)+Math.min(roi*0.2,30)+(pr>3?20:pr>1?10:0)+10),100);
-  const combinedScore = Math.round(profitScore * 0.25 + demand.score * 0.30 + quality.qualityScore * 0.25 + competition.score * 0.20);
+  const combinedScore = Math.round(
+    profitScore * 0.20 + demand.score * 0.25 + quality.qualityScore * 0.20 +
+    competition.score * 0.15 + lifecycle.score * 0.10 + Math.min(velocity.perDay * 20, 100) * 0.10
+  );
 
   // Reinvestment projection — realistic with lead time + sell-through
   // China sourcing: ~3 week lead time. UK: ~1 week. Sell-through varies.
@@ -464,7 +479,7 @@ function analyse(d, budget) {
   // Final recommendation — must pass ALL checks
   let rec;
   let passedChecks = 0;
-  const totalChecks = 8;
+  const totalChecks = 10;
   if (pr > 0) passedChecks++;
   if (mg >= 15) passedChecks++; // minimum 15% margin
   if (demand.level !== 'skip') passedChecks++;
@@ -473,13 +488,17 @@ function analyse(d, budget) {
   if (quality.season.peak) passedChecks++;
   if (quality.returnRate.rate <= 10) passedChecks++;
   if (competition.level !== 'risky') passedChecks++;
+  if (lifecycle.phase !== 'dying' && lifecycle.phase !== 'declining') passedChecks++; // NEW: not dying
+  if (buyBox.winRate >= 15) passedChecks++; // NEW: reasonable Buy Box chance
 
-  if (passedChecks === totalChecks && combinedScore >= 70)
-    rec = `✅ STRONG BUY — ${u} units, ~${timeToSell}mo to sell, £${netAfterTax.toFixed(0)} net profit after tax`;
-  else if (passedChecks >= 5 && combinedScore >= 55)
-    rec = `✅ BUY — ${u} units, £${netAfterTax.toFixed(0)} net after tax`;
-  else if (passedChecks >= 4 && combinedScore >= 40)
+  if (passedChecks >= 9 && combinedScore >= 70)
+    rec = `✅ STRONG BUY — ${u} units, ~${timeToSell}mo to sell, £${netAfterTax.toFixed(0)} net, £${velocity.perDay}/day`;
+  else if (passedChecks >= 7 && combinedScore >= 55)
+    rec = `✅ BUY — ${u} units, £${netAfterTax.toFixed(0)} net, Buy Box ${buyBox.winRate}%`;
+  else if (passedChecks >= 5 && combinedScore >= 40)
     rec = `⚠️ CAUTION — passed ${passedChecks}/${totalChecks} checks, review manually`;
+  else if (lifecycle.phase === 'dying')
+    rec = '❌ DYING PRODUCT — BSR worsening, demand dropping';
   else if (quality.privateLabel.isPrivateLabel)
     rec = '❌ BLOCKED — private label product, cannot arbitrage';
   else if (!d.buyPrice || pr <= 0)
@@ -494,6 +513,7 @@ function analyse(d, budget) {
     quality, competition, returnCost, adjustedProfit, adjustedBatchProfit,
     importVAT, importDuty, totalStorage, isChina: !!isChina,
     incomeTax, nationalInsurance, netAfterTax, reinvestment,
+    lifecycle, velocity, buyBox, reviewSentiment,
     passedChecks, totalChecks, rec,
   };
 }
@@ -513,10 +533,38 @@ async function keepa(asin) {
 
     // Count BSR drops in last 90 days (each drop = at least 1 sale)
     let bsrDrops = 0;
+    let bsrTrend = 'stable'; // growing, stable, declining
+    let bsr30 = null, bsr60 = null, bsr90 = null;
     if (p.csv && p.csv[3]) {
       const ranks = p.csv[3];
       for (let i = 2; i < ranks.length; i += 2) {
         if (ranks[i] < ranks[i-2] && ranks[i] > 0) bsrDrops++;
+      }
+      // BSR trajectory: compare recent vs older BSR (lower BSR = better)
+      const validRanks = [];
+      for (let i = 1; i < ranks.length; i += 2) {
+        if (ranks[i] > 0) validRanks.push(ranks[i]);
+      }
+      if (validRanks.length >= 6) {
+        const third = Math.floor(validRanks.length / 3);
+        bsr90 = Math.round(validRanks.slice(0, third).reduce((a,b)=>a+b,0) / third);
+        bsr60 = Math.round(validRanks.slice(third, third*2).reduce((a,b)=>a+b,0) / third);
+        bsr30 = Math.round(validRanks.slice(third*2).reduce((a,b)=>a+b,0) / (validRanks.length - third*2));
+        // If BSR is dropping (improving), product is growing
+        if (bsr30 < bsr90 * 0.7) bsrTrend = 'growing';
+        else if (bsr30 > bsr90 * 1.5) bsrTrend = 'declining';
+        else bsrTrend = 'stable';
+      }
+    }
+
+    // Review velocity — is review count accelerating?
+    let reviewVelocity = null;
+    if (p.csv?.[16] && p.csv[16].length >= 4) {
+      const rc = p.csv[16];
+      const recent = rc[rc.length - 1];
+      const older = rc.length >= 6 ? rc[rc.length - 3] : rc[0];
+      if (older > 0 && recent > older) {
+        reviewVelocity = parseFloat(((recent - older) / older * 100).toFixed(1));
       }
     }
 
@@ -543,6 +591,8 @@ async function keepa(asin) {
       buyBox: st.current?.[18]>0 ? (st.current[18]/100).toFixed(2) : null,
       bsrDrops90d: bsrDrops,
       estimatedSales90d: Math.round(bsrDrops * 1.5),
+      // Trajectory data
+      bsrTrend, bsr30, bsr60, bsr90, reviewVelocity,
       // Competition data
       sellerCount, amazonSells, buyBoxSeller,
       priceMin90, priceMax90, priceStability,
@@ -1329,6 +1379,301 @@ async function runEdgeIntel() {
 }
 
 // ═══════════════════════════════════════
+// INTELLIGENCE ENGINE v2 — 7 upgrades that make deals SMARTER
+// ═══════════════════════════════════════
+
+// 1. PRODUCT LIFECYCLE — is this product growing, stable, or dying?
+function assessLifecycle(d) {
+  const trend = d.bsrTrend || 'stable';
+  const rv = d.reviewVelocity || 0;
+  let phase, message, score;
+
+  if (trend === 'growing' && rv > 5) {
+    phase = 'rocket'; score = 100;
+    message = `BSR improving + reviews accelerating (+${rv}%) — product is EXPLODING. Get in NOW.`;
+  } else if (trend === 'growing') {
+    phase = 'growing'; score = 85;
+    message = `BSR trending down (improving) over 90 days — demand is increasing.`;
+  } else if (trend === 'stable' && rv > 3) {
+    phase = 'strong'; score = 75;
+    message = `Stable BSR + steady reviews — mature product with consistent demand.`;
+  } else if (trend === 'stable') {
+    phase = 'stable'; score = 65;
+    message = `Stable BSR — reliable but not growing. Safe bet.`;
+  } else if (trend === 'declining' && rv < 1) {
+    phase = 'dying'; score = 15;
+    message = `BSR rising (worsening) + review growth stalled — product may be DYING. Avoid.`;
+  } else {
+    phase = 'declining'; score = 30;
+    message = `BSR trending up (worsening) — demand may be dropping. Caution.`;
+  }
+
+  // Add BSR trajectory data
+  if (d.bsr30 && d.bsr90) {
+    const change = Math.round((1 - d.bsr30 / d.bsr90) * 100);
+    message += ` BSR: ${d.bsr90} → ${d.bsr30} (${change > 0 ? '+' : ''}${change}% ${change > 0 ? 'better' : 'worse'}).`;
+  }
+
+  return { phase, score, message, trend, reviewVelocity: rv };
+}
+
+// 2. PROFIT VELOCITY — £ per day, not just £ per unit
+function calcProfitVelocity(profitPerUnit, salesEstimate, units) {
+  const dailySales = salesEstimate.daily || 0;
+  if (dailySales <= 0 || profitPerUnit <= 0) return { perDay: 0, perWeek: 0, perMonth: 0, rating: 'dead', message: 'No sales velocity' };
+
+  // You won't get ALL the sales — estimate your share based on competition
+  // Assume you get Buy Box ~30% of the time with other FBA sellers
+  const yourShare = Math.min(dailySales * 0.3, units / 30); // Cap at your stock lasting 30 days
+  const perDay = parseFloat((yourShare * profitPerUnit).toFixed(2));
+  const perWeek = parseFloat((perDay * 7).toFixed(2));
+  const perMonth = parseFloat((perDay * 30).toFixed(2));
+
+  let rating, message;
+  if (perDay >= 5) { rating = 'excellent'; message = `£${perDay}/day — this is a cash machine`; }
+  else if (perDay >= 2) { rating = 'good'; message = `£${perDay}/day — solid earner`; }
+  else if (perDay >= 0.5) { rating = 'ok'; message = `£${perDay}/day — steady trickle`; }
+  else { rating = 'slow'; message = `£${perDay}/day — slow mover, ties up capital`; }
+
+  return { perDay, perWeek, perMonth, rating, message, yourDailySales: parseFloat(yourShare.toFixed(1)) };
+}
+
+// 3. BUY BOX WIN RATE ESTIMATOR
+function estimateBuyBoxWinRate(d) {
+  let winRate = 50; // base: even chance
+  let reasons = [];
+
+  // FBA vs FBM — FBA almost always wins
+  reasons.push('FBA seller — advantage over FBM sellers');
+
+  // Seller count impact
+  const sellers = d.sellerCount || 1;
+  if (sellers <= 1) { winRate = 95; reasons.push('Only seller — Buy Box is yours'); }
+  else if (sellers <= 3) { winRate = 60; reasons.push(`${sellers} sellers — good rotation share`); }
+  else if (sellers <= 6) { winRate = 35; reasons.push(`${sellers} sellers — moderate competition`); }
+  else if (sellers <= 10) { winRate = 20; reasons.push(`${sellers} sellers — crowded, less Buy Box time`); }
+  else { winRate = 10; reasons.push(`${sellers}+ sellers — race to bottom, minimal Buy Box`); }
+
+  // Amazon as seller = they dominate
+  if (d.amazonSells) {
+    winRate = Math.min(winRate, 5);
+    reasons.push('Amazon is selling — they get ~90% of Buy Box');
+  }
+
+  // Price competitiveness (if your price matches or beats)
+  if (d.priceStability && d.priceStability >= 85) {
+    winRate += 5;
+    reasons.push('Stable price — less undercutting risk');
+  }
+
+  winRate = Math.max(Math.min(winRate, 95), 2);
+
+  let level;
+  if (winRate >= 60) level = 'strong';
+  else if (winRate >= 30) level = 'moderate';
+  else if (winRate >= 15) level = 'weak';
+  else level = 'unlikely';
+
+  return { winRate, level, reasons, effectiveDailySales: (d.estimatedSales90d || 0) / 90 * (winRate / 100) };
+}
+
+// 4. SMART REPRICER — auto-adjust prices based on competition
+async function smartReprice() {
+  if (!process.env.KEEPA_API_KEY) return [];
+  log('💲 Smart Repricer running...');
+  const changes = [];
+  const liveItems = (S.inventory || []).filter(i => i.status === 'live' && i.asin);
+
+  for (const item of liveItems.slice(0, 10)) {
+    try {
+      const k = await keepa(item.asin);
+      if (!k?.price) continue;
+
+      const currentAmazonPrice = parseFloat(k.price);
+      const myPrice = item.sellPrice;
+      const minProfit = 2; // Never go below £2 profit
+
+      // Calculate minimum viable price
+      const fees = calcFees(myPrice, item.weightKg || 0.3, item.category || 'Home & Kitchen');
+      const minPrice = parseFloat((item.buyPrice + fees.rf + fees.ff + fees.sf + 0.50 + minProfit).toFixed(2));
+
+      let newPrice = myPrice;
+      let reason = '';
+
+      // Strategy: match lowest FBA price minus 1p (win Buy Box)
+      if (currentAmazonPrice < myPrice * 0.95) {
+        // Someone undercut by >5% — match them if still profitable
+        newPrice = Math.max(parseFloat((currentAmazonPrice - 0.01).toFixed(2)), minPrice);
+        reason = `Competitor at £${currentAmazonPrice} — matching to win Buy Box`;
+      } else if (k.sellerCount <= 2 && !k.amazonSells) {
+        // Low competition — can we raise price?
+        newPrice = parseFloat(Math.min(myPrice * 1.08, parseFloat(k.priceMax90 || myPrice)).toFixed(2));
+        if (newPrice > myPrice) reason = `Only ${k.sellerCount} sellers — raising price to £${newPrice}`;
+      } else if (currentAmazonPrice > myPrice * 1.1) {
+        // We're cheaper than everyone — raise to capture more margin
+        newPrice = parseFloat((currentAmazonPrice * 0.98).toFixed(2));
+        reason = `Competitors at £${currentAmazonPrice} — raising to £${newPrice} for more margin`;
+      }
+
+      if (newPrice !== myPrice && newPrice >= minPrice) {
+        const oldProfit = myPrice - item.buyPrice - fees.rf - fees.ff;
+        const newProfit = newPrice - item.buyPrice - fees.rf - fees.ff;
+        changes.push({
+          asin: item.asin, name: item.name,
+          oldPrice: myPrice, newPrice,
+          oldProfit: parseFloat(oldProfit.toFixed(2)),
+          newProfit: parseFloat(newProfit.toFixed(2)),
+          reason, autoApplied: false,
+        });
+        // Auto-apply if autopilot is on
+        if (S.autopilot?.enabled) {
+          item.sellPrice = newPrice;
+          item.priceHistory = item.priceHistory || [];
+          item.priceHistory.push({ price: newPrice, date: new Date().toISOString(), reason });
+          changes[changes.length - 1].autoApplied = true;
+          log(`💲 Repriced: ${item.name.slice(0, 30)} £${myPrice} → £${newPrice} (${reason})`);
+
+          // Update on Amazon if SP-API connected
+          if (process.env.SP_REFRESH_TOKEN && item.amazonSku) {
+            try { await spApiCreateOffer(item.asin, newPrice); } catch (e) { /* silent */ }
+          }
+        }
+      }
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) { /* silent */ }
+  }
+
+  if (changes.length) {
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.repricing = { changes, updated: new Date().toISOString() };
+    save(S);
+  }
+  log(`💲 Repricer: ${changes.length} price changes${changes.filter(c => c.autoApplied).length ? ' (' + changes.filter(c => c.autoApplied).length + ' auto-applied)' : ''}`);
+  return changes;
+}
+
+// 5. AUTO-REORDER INTELLIGENCE — predict when stock runs out, reorder with lead time buffer
+function calcReorderAlert(item) {
+  if (!item || item.status !== 'live') return null;
+  const sold = item.sold || 0;
+  const remaining = Math.max((item.units || 0) - sold - (item.returnCount || 0), 0);
+  const daysLive = Math.max(Math.floor((Date.now() - new Date(item.dateSent).getTime()) / 86400000), 1);
+  const dailySellRate = sold / daysLive;
+
+  if (dailySellRate <= 0) return { daysUntilOut: 999, action: 'No sales yet — too early to predict', urgency: 'none' };
+
+  const daysUntilOut = Math.round(remaining / dailySellRate);
+  const leadTimeDays = 21; // China to FBA: ~3 weeks
+  const reorderPoint = leadTimeDays + 7; // Lead time + 7 day safety buffer
+
+  let urgency, action;
+  if (daysUntilOut <= 7) {
+    urgency = 'critical';
+    action = `STOCKOUT in ${daysUntilOut} days! Reorder NOW or use air freight (5-7 days). Order ${Math.ceil(dailySellRate * 45)} units.`;
+  } else if (daysUntilOut <= reorderPoint) {
+    urgency = 'reorder_now';
+    action = `Reorder NOW — ${daysUntilOut} days of stock left. Need ${leadTimeDays} days for China delivery. Order ${Math.ceil(dailySellRate * 60)} units for 2 months.`;
+  } else if (daysUntilOut <= reorderPoint + 14) {
+    urgency = 'plan';
+    action = `Plan reorder in ${daysUntilOut - reorderPoint} days. Selling ${dailySellRate.toFixed(1)}/day, ${remaining} left.`;
+  } else {
+    urgency = 'ok';
+    action = `Stock OK — ${daysUntilOut} days left at ${dailySellRate.toFixed(1)}/day sell rate.`;
+  }
+
+  return {
+    daysUntilOut, dailySellRate: parseFloat(dailySellRate.toFixed(1)),
+    remaining, reorderPoint, urgency, action,
+    suggestedUnits: Math.ceil(dailySellRate * 60), // 2 months supply
+  };
+}
+
+// 6. MULTI-MARKETPLACE SCANNER — same ASIN, different Amazon marketplaces
+async function scanMarketplaces(asin) {
+  if (!process.env.KEEPA_API_KEY) return null;
+  // Keepa domain codes: 1=.com, 2=.co.uk, 3=.de, 4=.fr, 5=.co.jp, 8=.it, 9=.es
+  const markets = [
+    { domain: 3, name: 'Amazon DE', code: 'de', currency: 'EUR', toGbp: 0.86 },
+    { domain: 4, name: 'Amazon FR', code: 'fr', currency: 'EUR', toGbp: 0.86 },
+    { domain: 8, name: 'Amazon IT', code: 'it', currency: 'EUR', toGbp: 0.86 },
+    { domain: 9, name: 'Amazon ES', code: 'es', currency: 'EUR', toGbp: 0.86 },
+    { domain: 1, name: 'Amazon US', code: 'com', currency: 'USD', toGbp: 0.78 },
+  ];
+
+  const results = [];
+  const key = process.env.KEEPA_API_KEY;
+
+  for (const m of markets) {
+    try {
+      const r = await fetch(`https://api.keepa.com/product?key=${key}&domain=${m.domain}&asin=${asin}&stats=90`);
+      const d = await r.json();
+      const p = d.products?.[0];
+      if (!p) continue;
+      const st = p.stats || {};
+      const price = st.current?.[0] > 0 ? (st.current[0] / 100) : null;
+      if (!price) continue;
+
+      const priceGbp = parseFloat((price * m.toGbp).toFixed(2));
+      results.push({
+        marketplace: m.name, code: m.code, currency: m.currency,
+        localPrice: parseFloat(price.toFixed(2)), priceGbp,
+        bsr: st.current?.[3] || null,
+        url: `https://www.amazon.${m.code}/dp/${asin}`,
+      });
+      await new Promise(r => setTimeout(r, 1000));
+    } catch (e) { /* silent */ }
+  }
+
+  return results;
+}
+
+// 7. REVIEW SENTIMENT — detect quality problems from review patterns
+function assessReviewSentiment(d) {
+  const rc = d.reviewCount || 0;
+  const rating = parseFloat(d.rating || 0);
+  const rv = d.reviewVelocity || 0;
+
+  let sentiment = 'unknown', confidence = 'low', warnings = [];
+
+  if (rc >= 5000 && rating >= 4.3) {
+    sentiment = 'excellent';
+    confidence = 'high';
+    if (rv > 5) warnings.push('Reviews accelerating — demand growing');
+  } else if (rc >= 1000 && rating >= 4.0) {
+    sentiment = 'good';
+    confidence = 'medium';
+  } else if (rc >= 500 && rating >= 3.8) {
+    sentiment = 'mixed';
+    confidence = 'medium';
+    warnings.push('Rating below 4.0 — some customer complaints likely');
+  } else if (rating < 3.5) {
+    sentiment = 'negative';
+    confidence = rc >= 200 ? 'high' : 'medium';
+    warnings.push('Poor rating — high return risk, avoid this product');
+  }
+
+  // Detect rating decline (if rating is low relative to review count, recent reviews may be worse)
+  if (rc >= 10000 && rating < 4.2) {
+    warnings.push('Large review count but rating dropping below 4.2 — quality may be declining');
+  }
+  if (rc >= 1000 && rating >= 4.7) {
+    warnings.push('Suspiciously high rating — may have incentivised reviews');
+  }
+
+  // Review-to-sales ratio (typical: 1-3% of buyers leave reviews)
+  const estTotalSales = rc * 50; // ~2% review rate
+  const message = sentiment === 'excellent'
+    ? `${(rc/1000).toFixed(0)}K reviews at ${rating}★ — customers love this product`
+    : sentiment === 'good'
+    ? `${(rc/1000).toFixed(0)}K reviews at ${rating}★ — solid product`
+    : sentiment === 'mixed'
+    ? `${rc} reviews at ${rating}★ — check recent reviews before buying`
+    : `${rc} reviews at ${rating}★ — risky, customers are unhappy`;
+
+  return { sentiment, confidence, message, warnings, estTotalSales };
+}
+
+// ═══════════════════════════════════════
 // AUTO SCANNER (every 2 hours — aggressive)
 // Scans 12 Amazon UK categories for profitable products
 // ═══════════════════════════════════════
@@ -1397,7 +1742,8 @@ async function autoScan() {
         if (analysed.score < 60) { log(`⏭️ Skip: ${k.title} — score ${analysed.score} too low`); continue; }
         if (analysed.pr <= 3) { log(`⏭️ Skip: ${k.title} — profit £${analysed.pr} too low`); continue; }
         if (analysed.mg < 20) { log(`⏭️ Skip: ${k.title} — margin ${analysed.mg}% too thin`); continue; }
-        if (analysed.passedChecks < 6) { log(`⏭️ Skip: ${k.title} — only ${analysed.passedChecks}/${analysed.totalChecks} checks`); continue; }
+        if (analysed.passedChecks < 7) { log(`⏭️ Skip: ${k.title} — only ${analysed.passedChecks}/${analysed.totalChecks} checks`); continue; }
+        if (analysed.lifecycle?.phase === 'dying') { log(`⏭️ Skip: ${k.title} — dying product`); continue; }
 
         S.deals = S.deals||[];
         S.deals.unshift(deal);
@@ -1561,6 +1907,7 @@ cron.schedule('0 */2 * * *', ()=>autoScan()); // Scan every 2 hours
 cron.schedule('30 */2 * * *', ()=>runAutopilot()); // Autopilot every 2hr (30min after scan)
 cron.schedule('0 9 * * 1', ()=>sendDigest()); // Weekly digest Monday 9am
 cron.schedule('0 6 * * *', ()=>runEdgeIntel()); // Edge Intelligence daily 6am (before you wake up)
+cron.schedule('0 */3 * * *', ()=>smartReprice()); // Smart Repricer every 3 hours
 cron.schedule('0 */8 * * *', ()=>checkFXRate()); // FX rate 3x/day
 cron.schedule('0 7 * * *', ()=>scanWeatherDemand()); // Weather forecast daily 7am
 cron.schedule('0 8 * * *', ()=>{
@@ -1593,6 +1940,7 @@ app.get('/api/state', (req,res)=>{
     log:(S.log||[]).slice(0,30),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
     cj:!!process.env.CJ_API_KEY,spApi:!!process.env.SP_REFRESH_TOKEN,prepAddress:!!S.prepAddress,
     autopilot:S.autopilot, edgeIntel:S.edgeIntel||{},
+    reorderAlerts:(S.inventory||[]).filter(i=>i.status==='live').map(i=>({...calcReorderAlert(i),name:i.name,asin:i.asin,id:i.id})).filter(a=>a.urgency!=='none'&&a.urgency!=='ok'),
     sources:SOURCES.map(s=>({name:s.name,region:s.region,ship:s.ship,days:s.days}))});
 });
 
@@ -2342,6 +2690,27 @@ app.post('/api/seed', (req,res)=>{
     {id:3,name:"Electric Milk Frother USB Rechargeable Handheld Coffee Whisk",reviews:"28K+ · 4.5★",category:"Home & Kitchen",buyPrice:3.50,sellPrice:15.99,weightKg:0.18,salesRank:85,reviewCount:28000,rating:"4.5",bsrDrops90d:1800,estimatedSales90d:1800,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=electric+milk+frother+rechargeable",note:"28K reviews, BSR #85. Coffee trend product.",src:"Seed deal",sources:getSources("electric milk frother rechargeable")},
   ];
   save(S); res.json({msg:'Seeded',count:3});
+});
+
+// ═══════════════════════════════════════
+// INTELLIGENCE v2 ROUTES
+// ═══════════════════════════════════════
+app.post('/api/reprice', async(req,res)=>{
+  const changes = await smartReprice();
+  res.json({ changes, msg: `${changes.length} price changes` });
+});
+app.get('/api/reorder-alerts', (req,res)=>{
+  const alerts = (S.inventory || [])
+    .filter(i => i.status === 'live')
+    .map(i => ({ ...calcReorderAlert(i), name: i.name, asin: i.asin, id: i.id }))
+    .filter(a => a.urgency !== 'none')
+    .sort((a, b) => a.daysUntilOut - b.daysUntilOut);
+  res.json(alerts);
+});
+app.get('/api/marketplace/:asin', async(req,res)=>{
+  if (!/^[A-Z0-9]{10}$/.test(req.params.asin)) return res.status(400).json({error:'Invalid ASIN'});
+  const results = await scanMarketplaces(req.params.asin);
+  res.json(results);
 });
 
 // ═══════════════════════════════════════
