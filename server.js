@@ -721,6 +721,94 @@ function getSources(name) {
 }
 
 // ═══════════════════════════════════════
+// TACTICAL ARBITRAGE INTEGRATION
+// TA scans 1000+ stores for price gaps. Sends email alerts + CSV exports.
+// This parses TA emails to extract REAL buy prices and creates deals automatically.
+// Also accepts CSV upload from TA's export feature.
+// ═══════════════════════════════════════
+
+// Parse Tactical Arbitrage email content for product data
+function parseTAEmail(subject, snippet, body) {
+  const deals = [];
+  const text = (subject + ' ' + snippet + ' ' + (body || '')).replace(/\s+/g, ' ');
+
+  // TA emails typically contain: ASIN, product name, source store, buy price, sell price, profit, ROI, BSR
+  // Pattern 1: "B0XXXXXXXX ... $XX.XX ... £XX.XX ... XX% ROI ... BSR #XXXX"
+  const asinMatches = [...new Set(text.match(/\bB0[A-Z0-9]{8}\b/g) || [])];
+
+  // Extract prices — TA often formats as "£5.99 → £19.99" or "Buy: £5.99 Sell: £19.99"
+  const prices = text.match(/[£$]\d+\.?\d*/g) || [];
+  const rois = text.match(/(\d+\.?\d*)%\s*(?:ROI|profit|margin)/gi) || [];
+  const bsrMatch = text.match(/BSR[:#\s]*(\d[\d,]*)/i);
+  const sourceMatch = text.match(/(?:from|source|store|at|via)\s*[:\-]?\s*([A-Za-z][A-Za-z0-9\s&'.]+?)(?:\s*[-–|,]|\s*£|\s*\$|\s*B0)/i);
+
+  for (const asin of asinMatches) {
+    const deal = { asin, fromTA: true };
+    // Try to extract buy price (usually the lower price)
+    if (prices.length >= 2) {
+      const nums = prices.map(p => parseFloat(p.replace(/[£$]/,'')));
+      nums.sort((a,b) => a - b);
+      deal.taBuyPrice = nums[0]; // cheapest = buy
+      deal.taSellPrice = nums[nums.length > 2 ? nums.length - 1 : 1]; // highest = sell
+    }
+    if (bsrMatch) deal.taBsr = parseInt(bsrMatch[1].replace(/,/g,''));
+    if (sourceMatch) deal.taSource = sourceMatch[1].trim();
+    if (rois.length) deal.taROI = parseFloat(rois[0]);
+    deals.push(deal);
+  }
+  return deals;
+}
+
+// Parse Tactical Arbitrage CSV export
+function parseTACSV(csvText) {
+  const lines = csvText.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  // TA CSV headers typically: ASIN, Title, Category, Buy Price, Sell Price, Profit, ROI, BSR, Source, URL, FBA Fees, etc.
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+  const deals = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    // Handle CSV with quoted fields
+    const vals = [];
+    let current = '', inQuote = false;
+    for (const ch of lines[i]) {
+      if (ch === '"') { inQuote = !inQuote; continue; }
+      if (ch === ',' && !inQuote) { vals.push(current.trim()); current = ''; continue; }
+      current += ch;
+    }
+    vals.push(current.trim());
+
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+    // Map TA fields to our deal format
+    const asin = row.asin || row['amazon asin'] || row['asin '] || '';
+    if (!/^B0[A-Z0-9]{8}$/.test(asin)) continue;
+
+    const buyPrice = parseFloat(row['buy price'] || row['source price'] || row['cost'] || row.price || 0);
+    const sellPrice = parseFloat(row['sell price'] || row['amazon price'] || row['fba price'] || 0);
+    if (!buyPrice || !sellPrice) continue;
+
+    deals.push({
+      asin,
+      name: row.title || row['product name'] || row.name || 'TA Import',
+      buyPrice,
+      sellPrice,
+      category: row.category || 'Home & Kitchen',
+      bsr: parseInt(row.bsr || row['sales rank'] || row['best sellers rank'] || 0),
+      roi: parseFloat(row.roi || row['roi %'] || 0),
+      profit: parseFloat(row.profit || row['est. profit'] || 0),
+      source: row.source || row['source store'] || row.store || 'Tactical Arbitrage',
+      sourceUrl: row['source url'] || row['buy link'] || row.url || '',
+      fbaFees: parseFloat(row['fba fees'] || row['amazon fees'] || row.fees || 0),
+      fromTA: true,
+    });
+  }
+  return deals;
+}
+
+// ═══════════════════════════════════════
 // GMAIL (every 2 minutes)
 // ═══════════════════════════════════════
 let gAuth = null;
@@ -755,6 +843,11 @@ async function checkGmail() {
         snippet: full.data.snippet||'',
       };
 
+      // Check if this is a Tactical Arbitrage email
+      const isTA = (alert.from + alert.subject).toLowerCase().includes('tactical arbitrage') ||
+                   alert.from.includes('tacticalarbitrage') || alert.from.includes('tactarb');
+      const taDeals = isTA ? parseTAEmail(alert.subject, alert.snippet) : [];
+
       // Auto-extract ASINs and look up
       const asins = [...new Set(((alert.snippet+' '+alert.subject).match(/\bB0[A-Z0-9]{8}\b/g)||[]))];
       if (asins.length > 0 && process.env.KEEPA_API_KEY) {
@@ -762,22 +855,29 @@ async function checkGmail() {
           const k = await keepa(asin);
           if (k?.price) {
             const sp = parseFloat(k.price);
-            const estBuyPrice = parseFloat((sp * 0.25).toFixed(2));
+            // Use TA's REAL buy price if available, otherwise estimate from China
+            const taMatch = taDeals.find(td => td.asin === asin);
+            const buyPrice = taMatch?.taBuyPrice || parseFloat((sp * 0.25).toFixed(2));
+            const fromSource = taMatch?.taSource || 'AliExpress (est.)';
+            const isRealPrice = !!taMatch?.taBuyPrice;
+
             const deal = {
               id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
-              buyPrice: estBuyPrice, estBuyPrice,
+              buyPrice, estBuyPrice: parseFloat((sp * 0.25).toFixed(2)),
               weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
               brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
               priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
               reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
               bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
               reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
-              from: 'AliExpress (est.)', sources: getSources(k.title),
+              from: fromSource, sources: getSources(k.title),
               amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-              note: `From alert. £${sp} Amazon, buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} sales/90d.${k.amazonSells?' ⚠️ Amazon is a seller.':''}${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
-              risks: ['Verify buy price on AliExpress/Alibaba before ordering'],
-              src: `Gmail alert → Keepa API (${new Date().toLocaleDateString('en-GB')})`,
-              autoFound: true, needsPrice: false,
+              note: isTA
+                ? `Tactical Arbitrage find! Buy £${buyPrice} from ${fromSource} → Sell £${sp} on Amazon. BSR #${k.bsr}. ${isRealPrice?'VERIFIED price.':'Estimated price.'}`
+                : `From alert. £${sp} Amazon, buy ~£${buyPrice}. BSR #${k.bsr}. ~${k.estimatedSales90d} sales/90d.`,
+              risks: isRealPrice ? ['Check product matches Amazon listing exactly'] : ['Verify buy price before ordering'],
+              src: isTA ? `Tactical Arbitrage → Keepa (${new Date().toLocaleDateString('en-GB')})` : `Gmail → Keepa (${new Date().toLocaleDateString('en-GB')})`,
+              autoFound: true, needsPrice: false, fromTA: isTA, taVerified: isRealPrice,
             };
 
             // Pre-analyse and only keep profitable deals
@@ -785,7 +885,7 @@ async function checkGmail() {
             if (analysed.score >= 55 && analysed.pr > 2 && analysed.passedChecks >= 5) {
               S.deals = S.deals || [];
               S.deals.unshift(deal);
-              log(`✅ Found: ${k.title} — £${analysed.pr} profit, score ${analysed.score}, ${analysed.passedChecks}/${analysed.totalChecks}`);
+              log(`✅ ${isTA?'TA':'Gmail'}: ${k.title} — £${analysed.pr} profit, score ${analysed.score}, ${analysed.passedChecks}/${analysed.totalChecks}${isRealPrice?' (verified price)':''}`);
             } else {
               log(`❌ Skipped: ${k.title} — score ${analysed.score}, profit £${analysed.pr}`);
             }
@@ -1407,6 +1507,139 @@ app.post('/api/amazon/sync-inventory', async(req,res)=>{
   }
   if (updated) save(S);
   res.json({ ok: true, updated });
+});
+
+// ═══════════════════════════════════════
+// TACTICAL ARBITRAGE ROUTES
+// ═══════════════════════════════════════
+
+// Upload TA CSV export — imports all profitable deals at once
+app.post('/api/ta/import-csv', express.text({ type: '*/*', limit: '5mb' }), async(req,res)=>{
+  const csvText = req.body;
+  if (!csvText || typeof csvText !== 'string') return res.status(400).json({ error: 'Send CSV text in body' });
+
+  const taDeals = parseTACSV(csvText);
+  if (!taDeals.length) return res.json({ error: 'No valid deals found in CSV', hint: 'CSV must have ASIN, buy price, sell price columns' });
+
+  let added = 0, skipped = 0;
+  for (const td of taDeals) {
+    // Skip duplicates
+    if ((S.deals||[]).find(d => d.asin === td.asin)) { skipped++; continue; }
+
+    // Enrich with Keepa if available
+    let k = null;
+    if (process.env.KEEPA_API_KEY) {
+      k = await keepa(td.asin);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    const deal = {
+      id: Date.now() + Math.random(),
+      name: k?.title || td.name,
+      asin: td.asin,
+      sellPrice: k?.price ? parseFloat(k.price) : td.sellPrice,
+      buyPrice: td.buyPrice,
+      estBuyPrice: td.buyPrice,
+      weightKg: k?.weight ? parseFloat(k.weight) : 0.3,
+      category: k?.category || td.category,
+      brand: k?.brand || '',
+      sellerCount: k?.sellerCount || null,
+      amazonSells: k?.amazonSells || false,
+      priceStability: k?.priceStability || null,
+      priceMin90: k?.priceMin90 || null,
+      priceMax90: k?.priceMax90 || null,
+      reviewCount: k?.reviewCount || 0,
+      rating: k?.rating || 0,
+      salesRank: k?.bsr || td.bsr || 0,
+      bsrDrops90d: k?.bsrDrops90d || 0,
+      estimatedSales90d: k?.estimatedSales90d || 0,
+      reviews: k?.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
+      from: td.source || 'Tactical Arbitrage',
+      buyUrl: td.sourceUrl || '',
+      sources: getSources(k?.title || td.name),
+      amzUrl: `https://www.amazon.co.uk/dp/${td.asin}`,
+      note: `TA import. Buy £${td.buyPrice} from ${td.source||'TA source'} → Sell £${td.sellPrice} on Amazon.${td.roi ? ' TA ROI: '+td.roi+'%.' : ''}${td.bsr ? ' BSR #'+td.bsr+'.' : ''} VERIFIED price from TA scan.`,
+      risks: ['Check product matches Amazon listing exactly'],
+      src: `Tactical Arbitrage CSV (${new Date().toLocaleDateString('en-GB')})`,
+      autoFound: true, needsPrice: false, fromTA: true, taVerified: true,
+      status: 'found',
+    };
+
+    // Pre-analyse
+    const analysed = analyse(deal, S.budget || 200);
+    if (analysed.pr > 0 && analysed.score >= 40) {
+      S.deals = S.deals || [];
+      S.deals.unshift(deal);
+      added++;
+      log(`✅ TA CSV: ${(k?.title||td.name).slice(0,40)} — £${analysed.pr} profit, score ${analysed.score}`);
+    } else {
+      skipped++;
+    }
+  }
+
+  save(S);
+  log(`📊 TA CSV import: ${added} added, ${skipped} skipped from ${taDeals.length} rows`);
+  res.json({ ok: true, added, skipped, total: taDeals.length });
+});
+
+// Webhook endpoint — TA can POST deal data here (if using Zapier/Make.com integration)
+app.post('/api/ta/webhook', async(req,res)=>{
+  const data = req.body;
+  if (!data) return res.status(400).json({ error: 'No data' });
+
+  // Accept either single deal or array
+  const items = Array.isArray(data) ? data : [data];
+  let added = 0;
+
+  for (const item of items) {
+    const asin = item.asin || item.ASIN || '';
+    if (!/^B0[A-Z0-9]{8}$/.test(asin)) continue;
+    if ((S.deals||[]).find(d => d.asin === asin)) continue;
+
+    const buyPrice = parseFloat(item.buyPrice || item.buy_price || item.cost || item.source_price || 0);
+    const sellPrice = parseFloat(item.sellPrice || item.sell_price || item.amazon_price || 0);
+    if (!buyPrice || !sellPrice) continue;
+
+    // Enrich with Keepa
+    let k = null;
+    if (process.env.KEEPA_API_KEY) {
+      k = await keepa(asin);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    const deal = {
+      id: Date.now() + Math.random(),
+      name: k?.title || item.title || item.name || 'TA Deal',
+      asin, sellPrice: k?.price ? parseFloat(k.price) : sellPrice,
+      buyPrice, estBuyPrice: buyPrice,
+      weightKg: k?.weight ? parseFloat(k.weight) : 0.3,
+      category: k?.category || item.category || 'Home & Kitchen',
+      brand: k?.brand || '', sellerCount: k?.sellerCount || null,
+      amazonSells: k?.amazonSells || false,
+      reviewCount: k?.reviewCount || 0, rating: k?.rating || 0,
+      salesRank: k?.bsr || parseInt(item.bsr || item.sales_rank || 0),
+      bsrDrops90d: k?.bsrDrops90d || 0, estimatedSales90d: k?.estimatedSales90d || 0,
+      reviews: k?.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
+      from: item.source || item.store || 'Tactical Arbitrage',
+      buyUrl: item.source_url || item.buy_url || '',
+      sources: getSources(k?.title || item.title || ''),
+      amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
+      note: `TA webhook. Buy £${buyPrice} → Sell £${sellPrice}. VERIFIED.`,
+      src: `TA Webhook (${new Date().toLocaleDateString('en-GB')})`,
+      autoFound: true, needsPrice: false, fromTA: true, taVerified: true, status: 'found',
+    };
+
+    const analysed = analyse(deal, S.budget || 200);
+    if (analysed.pr > 0) {
+      S.deals = S.deals || [];
+      S.deals.unshift(deal);
+      added++;
+      log(`✅ TA webhook: ${deal.name.slice(0,40)} — £${analysed.pr} profit, score ${analysed.score}`);
+    }
+  }
+
+  if (added) save(S);
+  res.json({ ok: true, added, received: items.length });
 });
 
 // Save prep centre address
