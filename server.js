@@ -623,32 +623,32 @@ async function checkGmail() {
           const k = await keepa(asin);
           if (k?.price) {
             const sp = parseFloat(k.price);
+            const estBuyPrice = parseFloat((sp * 0.25).toFixed(2));
             const deal = {
               id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
-              buyPrice: null, // MUST be verified — no guessing
+              buyPrice: estBuyPrice, estBuyPrice,
               weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
               brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
               priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
               reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
               bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
               reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
-              from: 'Find cheapest source below', sources: getSources(k.title),
+              from: 'AliExpress (est.)', sources: getSources(k.title),
               amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-              note: `From TA alert. £${sp} Amazon. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.amazonSells?' ⚠️ Amazon is a seller.':''}${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
-              risks: ['Buy price not yet verified — check sources', 'Compare all 11 sources for cheapest'],
+              note: `From alert. £${sp} Amazon, buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} sales/90d.${k.amazonSells?' ⚠️ Amazon is a seller.':''}${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
+              risks: ['Verify buy price on AliExpress/Alibaba before ordering'],
               src: `Gmail alert → Keepa API (${new Date().toLocaleDateString('en-GB')})`,
-              autoFound: true, needsPrice: true,
+              autoFound: true, needsPrice: false,
             };
 
-            // Only add if demand is proven
-            const salesEst = estimateSales(k.bsr, k.category);
-            const demand = assessDemand(k.bsr||999999, k.reviewCount||0, parseFloat(k.rating||0), salesEst);
-            if (demand.level !== 'skip') {
+            // Pre-analyse and only keep profitable deals
+            const analysed = analyse(deal, S.budget || 200);
+            if (analysed.score >= 55 && analysed.pr > 2 && analysed.passedChecks >= 5) {
               S.deals = S.deals || [];
               S.deals.unshift(deal);
-              log(`✅ Found: ${k.title} — BSR #${k.bsr}, ${k.estimatedSales90d}+ sales/90d, £${sp} Amazon`);
+              log(`✅ Found: ${k.title} — £${analysed.pr} profit, score ${analysed.score}, ${analysed.passedChecks}/${analysed.totalChecks}`);
             } else {
-              log(`❌ Skipped: ${k.title} — low demand (BSR ${k.bsr})`);
+              log(`❌ Skipped: ${k.title} — score ${analysed.score}, profit £${analysed.pr}`);
             }
           }
           await new Promise(r=>setTimeout(r,2000));
@@ -707,7 +707,7 @@ async function autoScan() {
 
         const deal = {
           id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
-          buyPrice: null, estBuyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+          buyPrice: estBuyPrice, estBuyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
           brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
           priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
           reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
@@ -715,16 +715,23 @@ async function autoScan() {
           reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
           from: 'AliExpress (est.)', sources: getSources(k.title),
           amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-          note: `Auto-found ${catName} product. £${sp} Amazon, est. buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
-          risks: ['Verify buy price on AliExpress/Alibaba before ordering', 'Check if product matches Amazon listing exactly'],
+          note: `Auto-found ${catName}. £${sp} on Amazon, buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} sales/90d.${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
+          risks: ['Verify buy price on AliExpress/Alibaba before ordering', 'Check product matches Amazon listing exactly'],
           src: `Auto-scan ${catName} (${new Date().toLocaleDateString('en-GB')})`,
-          autoFound: true, needsPrice: true,
-          status: 'found', // Pipeline: found → priced → ordered → prep → live → selling
+          autoFound: true, needsPrice: false,
+          status: 'found',
         };
+
+        // Pre-analyse to filter out bad deals BEFORE showing to user
+        const analysed = analyse(deal, S.budget || 200);
+        if (analysed.score < 55) { log(`⏭️ Skip: ${k.title} — score ${analysed.score} too low`); continue; }
+        if (analysed.pr <= 2) { log(`⏭️ Skip: ${k.title} — profit £${analysed.pr} too low`); continue; }
+        if (analysed.passedChecks < 5) { log(`⏭️ Skip: ${k.title} — only ${analysed.passedChecks}/${analysed.totalChecks} checks`); continue; }
+
         S.deals = S.deals||[];
         S.deals.unshift(deal);
         found++;
-        log(`✅ Auto: ${k.title} — £${sp} sell, ~£${estBuyPrice} buy, BSR #${k.bsr}`);
+        log(`✅ Auto: ${k.title} — £${sp} sell, ~£${estBuyPrice} buy, £${analysed.pr} profit, score ${analysed.score}, ${analysed.passedChecks}/${analysed.totalChecks} checks`);
         await new Promise(r=>setTimeout(r,2000));
       }
     } catch(e) { log('Scan error: '+e.message); }
