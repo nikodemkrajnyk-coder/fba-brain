@@ -665,17 +665,27 @@ async function checkGmail() {
 }
 
 // ═══════════════════════════════════════
-// AUTO SCANNER (every 6 hours)
+// AUTO SCANNER (every 2 hours — aggressive)
+// Scans 12 Amazon UK categories for profitable products
 // ═══════════════════════════════════════
+const SCAN_CATEGORIES = [
+  [11052591, 'Home & Kitchen'], [560800, 'Kitchen & Home'],
+  [364301031, 'Pet Supplies'], [319530011, 'Sports & Outdoors'],
+  [77028031, 'Baby Products'], [66280031, 'Beauty'],
+  [468292, 'Toys & Games'], [65801031, 'Health & Personal Care'],
+  [3146281, 'Garden & Outdoors'], [248877031, 'DIY & Tools'],
+  [560798, 'Lighting'], [2151888031, 'Stationery & Office'],
+];
+
 async function autoScan() {
   if (!process.env.KEEPA_API_KEY) return;
-  log('🔍 Auto-scanning Amazon UK best sellers...');
-  const cats = [11052591, 560800, 364301031, 319530011, 77028031]; // Home, Kitchen, Pet, Sports, Baby
-  for (const catId of cats) {
+  log('🔍 Auto-scanning ' + SCAN_CATEGORIES.length + ' categories...');
+  let found = 0;
+  for (const [catId, catName] of SCAN_CATEGORIES) {
     try {
       const asins = await keepaBestSellers(catId);
       if (!asins?.length) continue;
-      for (const asin of asins.slice(0,5)) {
+      for (const asin of asins.slice(0,8)) {
         if ((S.deals||[]).find(d=>d.asin===asin)) continue;
         const k = await keepa(asin);
         if (!k?.price) continue;
@@ -690,37 +700,46 @@ async function autoScan() {
         // Skip if Amazon is a seller — can't compete
         if (k.amazonSells) { log(`⏭️ Skip: ${k.title} — Amazon is seller`); continue; }
 
+        // Estimate buy price: China wholesale is typically 20-35% of Amazon UK price
+        const estBuyPrice = parseFloat((sp * 0.25).toFixed(2));
+        const competition = assessCompetition(k);
+        if (competition.level === 'risky') { log(`⏭️ Skip: ${k.title} — high competition`); continue; }
+
         const deal = {
           id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
-          buyPrice: null, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+          buyPrice: null, estBuyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
           brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
           priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
           reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
           bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
           reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
-          from: 'Find cheapest source', sources: getSources(k.title),
+          from: 'AliExpress (est.)', sources: getSources(k.title),
           amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-          note: `Auto-found. £${sp} Amazon. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
-          risks: ['Buy price needs verification'],
-          src: `Auto-scan (${new Date().toLocaleDateString('en-GB')})`,
+          note: `Auto-found ${catName} product. £${sp} Amazon, est. buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
+          risks: ['Verify buy price on AliExpress/Alibaba before ordering', 'Check if product matches Amazon listing exactly'],
+          src: `Auto-scan ${catName} (${new Date().toLocaleDateString('en-GB')})`,
           autoFound: true, needsPrice: true,
+          status: 'found', // Pipeline: found → priced → ordered → prep → live → selling
         };
         S.deals = S.deals||[];
         S.deals.unshift(deal);
-        log(`✅ Auto: ${k.title} — BSR #${k.bsr}, demand score ${demand.score}`);
+        found++;
+        log(`✅ Auto: ${k.title} — £${sp} sell, ~£${estBuyPrice} buy, BSR #${k.bsr}`);
         await new Promise(r=>setTimeout(r,2000));
       }
     } catch(e) { log('Scan error: '+e.message); }
   }
+  // Clean up old deals (keep max 50)
+  if (S.deals && S.deals.length > 50) S.deals = S.deals.slice(0, 50);
   save(S);
-  log('🔍 Scan complete');
+  log(`🔍 Scan complete — ${found} new deals found`);
 }
 
 // ═══════════════════════════════════════
 // CRON
 // ═══════════════════════════════════════
 cron.schedule('*/2 * * * *', ()=>{ log('📧 Gmail check...'); checkGmail(); });
-cron.schedule('0 */6 * * *', ()=>autoScan());
+cron.schedule('0 */2 * * *', ()=>autoScan()); // Scan every 2 hours
 cron.schedule('0 8 * * *', ()=>{
   log('📦 Inventory check...');
   (S.inventory||[]).forEach(i=>{
@@ -778,15 +797,26 @@ app.post('/api/deals', (req,res)=>{
 });
 app.delete('/api/deals/:id', (req,res)=>{ S.deals=(S.deals||[]).filter(d=>d.id!=req.params.id); save(S); res.json({ok:true}); });
 
+// Pipeline: found → priced → ordered → prep → live → selling
+app.post('/api/deals/:id/status', (req,res)=>{
+  S.deals = (S.deals||[]).map(d=> d.id==req.params.id ? {...d, status:req.body.status} : d);
+  save(S); res.json({ok:true});
+});
+
 app.post('/api/approve/:index', (req,res)=>{
   const deal=(S.deals||[])[req.params.index];
   if(!deal) return res.status(404).json({error:'Not found'});
   if(!deal.buyPrice) return res.status(400).json({error:'Set buy price first'});
+  const units = req.body.units||Math.floor((S.budget||200)/(deal.buyPrice||1));
   S.inventory=S.inventory||[];
-  S.inventory.push({id:Date.now(),name:deal.name,units:req.body.units||Math.floor((S.budget||200)/(deal.buyPrice||1)),
-    buyPrice:deal.buyPrice,sellPrice:deal.sellPrice,weightKg:deal.weightKg,dateSent:new Date().toISOString(),status:'ordered',asin:deal.asin});
-  log(`📦 Approved: ${deal.name}`);
-  save(S); res.json({ok:true});
+  S.inventory.push({id:Date.now(),name:deal.name,units,
+    buyPrice:deal.buyPrice,sellPrice:deal.sellPrice,weightKg:deal.weightKg,
+    dateSent:new Date().toISOString(),status:'ordered',asin:deal.asin,
+    category:deal.category,from:deal.from,buyUrl:deal.buyUrl});
+  // Update deal status
+  deal.status = 'ordered';
+  log(`📦 Ordered: ${deal.name} × ${units} units`);
+  save(S); res.json({ok:true,units});
 });
 
 app.patch('/api/inventory/:id', (req,res)=>{ S.inventory=(S.inventory||[]).map(i=>i.id==req.params.id?{...i,...req.body}:i); save(S); res.json({ok:true}); });
@@ -1041,13 +1071,12 @@ app.get('/api/health', (req,res)=>res.json({
 
 const PORT = process.env.PORT||3000;
 app.listen(PORT, ()=>{
-  console.log(`\n🧠 FBA Brain v4.0 FINAL — http://localhost:${PORT}`);
-  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅':'❌'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'❌'}`);
-  console.log(`   📧 Gmail: /2min  🔍 Scan: /6hr  📦 Stock: /day`);
-  console.log(`   🔬 Quality: ReviewMeta + Return Rate + Seasonality + Private Label`);
-  console.log(`   📝 Listing Generator: Auto-titles, bullets, description, keywords`);
-  console.log(`   💰 Tax: Income tax + NI + VAT threshold tracker`);
-  console.log(`   🌍 ${SOURCES.length} global sources configured\n`);
+  console.log(`\n🧠 FBA Brain v5.0 — http://localhost:${PORT}`);
+  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅ Active':'❌ Add key!'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'—'}`);
+  console.log(`   🔍 Auto-scan: ${SCAN_CATEGORIES.length} categories / 2hr`);
+  console.log(`   💰 Price monitor: every 4hr`);
+  console.log(`   📧 Gmail: every 2min`);
+  console.log(`   🌍 ${SOURCES.length} sources · 8-point checks · competition analysis\n`);
   if(!S.deals?.length) { S.deals=[
     {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
     {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,estimatedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ est. sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
