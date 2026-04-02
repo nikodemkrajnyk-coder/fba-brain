@@ -931,12 +931,18 @@ async function autoScan() {
         const k = await keepa(asin);
         if (!k?.price) continue;
         const sp = parseFloat(k.price);
-        if (sp < 5 || sp > 50) continue;
+
+        // QUALITY FILTER — only proven Amazon sellers, no cheap junk
+        if (sp < 12 || sp > 60) continue;             // £12-60 sweet spot (good margins, not too pricey)
+        if ((k.reviewCount || 0) < 500) continue;      // Must have 500+ reviews (proven product)
+        if (parseFloat(k.rating || 0) < 4.0) continue; // Must be 4★+ (customers like it)
+        if ((k.bsr || 999999) > 15000) continue;       // BSR under 15K (actually selling)
+        if ((k.estimatedSales90d || 0) < 60) continue;  // 60+ sales in 90 days (~20/month minimum)
 
         const salesEst = estimateSales(k.bsr, k.category);
         const demand = assessDemand(k.bsr||999999, k.reviewCount||0, parseFloat(k.rating||0), salesEst);
         if (demand.level === 'skip') continue;
-        if (demand.score < 50) continue; // Only high-demand products
+        if (demand.score < 60) continue; // Only proven high-demand products
 
         // Skip if Amazon is a seller — can't compete
         if (k.amazonSells) { log(`⏭️ Skip: ${k.title} — Amazon is seller`); continue; }
@@ -965,9 +971,10 @@ async function autoScan() {
 
         // Pre-analyse to filter out bad deals BEFORE showing to user
         const analysed = analyse(deal, S.budget || 200);
-        if (analysed.score < 55) { log(`⏭️ Skip: ${k.title} — score ${analysed.score} too low`); continue; }
-        if (analysed.pr <= 2) { log(`⏭️ Skip: ${k.title} — profit £${analysed.pr} too low`); continue; }
-        if (analysed.passedChecks < 5) { log(`⏭️ Skip: ${k.title} — only ${analysed.passedChecks}/${analysed.totalChecks} checks`); continue; }
+        if (analysed.score < 60) { log(`⏭️ Skip: ${k.title} — score ${analysed.score} too low`); continue; }
+        if (analysed.pr <= 3) { log(`⏭️ Skip: ${k.title} — profit £${analysed.pr} too low`); continue; }
+        if (analysed.mg < 20) { log(`⏭️ Skip: ${k.title} — margin ${analysed.mg}% too thin`); continue; }
+        if (analysed.passedChecks < 6) { log(`⏭️ Skip: ${k.title} — only ${analysed.passedChecks}/${analysed.totalChecks} checks`); continue; }
 
         S.deals = S.deals||[];
         S.deals.unshift(deal);
@@ -1180,36 +1187,36 @@ app.post('/api/autopilot/run', async(req,res)=>{ await runAutopilot(); res.json(
 // ═══════════════════════════════════════
 app.post('/api/simulate', (req,res)=>{
   const simDeals = [
-    { name: 'Silicone Kitchen Utensil Set 12 Piece Heat Resistant Cooking Tools', asin: 'B0SIM00001',
+    { name: 'Silicone Kitchen Utensil Set 14 Piece Heat Resistant Non-Stick Cooking Tools', asin: 'B0SIM00001',
       sellPrice: 24.99, buyPrice: 6.25, estBuyPrice: 6.25, weightKg: 0.8,
       category: 'Home & Kitchen', brand: 'HomeCraft', sellerCount: 8, amazonSells: false,
       priceStability: 85, priceMin90: '22.99', priceMax90: '26.99',
-      reviewCount: 4200, rating: 4.3, salesRank: 1850, bsrDrops90d: 180, estimatedSales90d: 180,
-      reviews: '4K+ · 4.3★' },
-    { name: 'LED Night Light Motion Sensor Rechargeable Warm White 2 Pack', asin: 'B0SIM00002',
-      sellPrice: 15.99, buyPrice: 3.50, estBuyPrice: 3.50, weightKg: 0.25,
+      reviewCount: 12400, rating: 4.5, salesRank: 890, bsrDrops90d: 320, estimatedSales90d: 320,
+      reviews: '12K+ · 4.5★' },
+    { name: 'LED Motion Sensor Night Light Rechargeable USB Warm White 3 Pack', asin: 'B0SIM00002',
+      sellPrice: 18.99, buyPrice: 4.20, estBuyPrice: 4.20, weightKg: 0.3,
       category: 'Lighting', brand: 'BrightHome', sellerCount: 5, amazonSells: false,
-      priceStability: 90, priceMin90: '14.99', priceMax90: '16.99',
-      reviewCount: 8900, rating: 4.5, salesRank: 920, bsrDrops90d: 310, estimatedSales90d: 310,
-      reviews: '9K+ · 4.5★' },
-    { name: 'Stainless Steel Dog Bowl Non-Slip Rubber Base Large 2 Pack', asin: 'B0SIM00003',
-      sellPrice: 13.99, buyPrice: 3.20, estBuyPrice: 3.20, weightKg: 0.6,
-      category: 'Pet Supplies', brand: 'PetPro', sellerCount: 6, amazonSells: false,
-      priceStability: 88, priceMin90: '12.99', priceMax90: '14.99',
-      reviewCount: 6100, rating: 4.4, salesRank: 2100, bsrDrops90d: 150, estimatedSales90d: 150,
-      reviews: '6K+ · 4.4★' },
-    { name: 'Bamboo Desk Organiser with Drawer Office Storage Tidy', asin: 'B0SIM00004',
-      sellPrice: 19.99, buyPrice: 4.80, estBuyPrice: 4.80, weightKg: 0.9,
+      priceStability: 92, priceMin90: '17.99', priceMax90: '19.99',
+      reviewCount: 23500, rating: 4.6, salesRank: 420, bsrDrops90d: 580, estimatedSales90d: 580,
+      reviews: '24K+ · 4.6★' },
+    { name: 'Stainless Steel Insulated Water Bottle 750ml Double Wall Vacuum Flask', asin: 'B0SIM00003',
+      sellPrice: 16.99, buyPrice: 3.80, estBuyPrice: 3.80, weightKg: 0.45,
+      category: 'Sports & Outdoors', brand: 'HydroFlask', sellerCount: 7, amazonSells: false,
+      priceStability: 88, priceMin90: '15.99', priceMax90: '17.99',
+      reviewCount: 18200, rating: 4.4, salesRank: 1100, bsrDrops90d: 250, estimatedSales90d: 250,
+      reviews: '18K+ · 4.4★' },
+    { name: 'Bamboo Desk Organiser with Drawer Multi-Compartment Office Storage', asin: 'B0SIM00004',
+      sellPrice: 22.99, buyPrice: 5.50, estBuyPrice: 5.50, weightKg: 0.9,
       category: 'Stationery & Office', brand: 'DeskTidy', sellerCount: 4, amazonSells: false,
-      priceStability: 82, priceMin90: '18.99', priceMax90: '21.99',
-      reviewCount: 3200, rating: 4.2, salesRank: 3400, bsrDrops90d: 95, estimatedSales90d: 95,
-      reviews: '3K+ · 4.2★' },
-    { name: 'Resistance Bands Set 5 Pack Exercise Fitness Yoga Pilates', asin: 'B0SIM00005',
-      sellPrice: 11.99, buyPrice: 2.50, estBuyPrice: 2.50, weightKg: 0.2,
-      category: 'Sports & Outdoors', brand: 'FitBands', sellerCount: 12, amazonSells: false,
-      priceStability: 75, priceMin90: '9.99', priceMax90: '12.99',
-      reviewCount: 15000, rating: 4.4, salesRank: 650, bsrDrops90d: 420, estimatedSales90d: 420,
-      reviews: '15K+ · 4.4★' },
+      priceStability: 84, priceMin90: '21.99', priceMax90: '24.99',
+      reviewCount: 8700, rating: 4.3, salesRank: 2200, bsrDrops90d: 140, estimatedSales90d: 140,
+      reviews: '9K+ · 4.3★' },
+    { name: 'Electric Milk Frother Handheld Rechargeable USB Stainless Steel Whisk', asin: 'B0SIM00005',
+      sellPrice: 14.99, buyPrice: 3.20, estBuyPrice: 3.20, weightKg: 0.2,
+      category: 'Home & Kitchen', brand: 'FrothMaster', sellerCount: 6, amazonSells: false,
+      priceStability: 90, priceMin90: '13.99', priceMax90: '15.99',
+      reviewCount: 31000, rating: 4.5, salesRank: 340, bsrDrops90d: 680, estimatedSales90d: 680,
+      reviews: '31K+ · 4.5★' },
   ];
 
   S.deals = S.deals || [];
@@ -1847,9 +1854,9 @@ cron.schedule('15 */2 * * *', async()=>{
 app.post('/api/seed', (req,res)=>{
   if(S.deals?.length>0) return res.json({msg:'Already seeded'});
   S.deals=[
-    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
-    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,estimatedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ est. sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
-    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ est. sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
+    {id:1,name:"Digital Instant Read Meat Thermometer Kitchen BBQ Food Probe",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:14.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"41K reviews, BSR #47. Proven bestseller.",src:"Seed deal",sources:getSources("instant read meat thermometer")},
+    {id:2,name:"8-Blade Vegetable Chopper Dicer Multi-Function Kitchen Cutter",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:22.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"124K reviews, BSR #23. Top kitchen gadget on Amazon UK.",src:"Seed deal",sources:getSources("vegetable chopper 8 blade")},
+    {id:3,name:"Electric Milk Frother USB Rechargeable Handheld Coffee Whisk",reviews:"28K+ · 4.5★",category:"Home & Kitchen",buyPrice:3.50,sellPrice:15.99,weightKg:0.18,salesRank:85,reviewCount:28000,rating:"4.5",bsrDrops90d:1800,estimatedSales90d:1800,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=electric+milk+frother+rechargeable",note:"28K reviews, BSR #85. Coffee trend product.",src:"Seed deal",sources:getSources("electric milk frother rechargeable")},
   ];
   save(S); res.json({msg:'Seeded',count:3});
 });
@@ -1870,8 +1877,8 @@ app.listen(PORT, ()=>{
   console.log(`   💰 Price monitor: every 4hr`);
   console.log(`   🌍 ${SOURCES.length} sources · 8-point checks · competition analysis\n`);
   if(!S.deals?.length) { S.deals=[
-    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
-    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,estimatedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ est. sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
-    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ est. sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
-  ]; save(S); log('Seeded 3 starter deals'); }
+    {id:1,name:"Digital Instant Read Meat Thermometer Kitchen BBQ Food Probe",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:14.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"41K reviews, BSR #47. Proven bestseller.",src:"Seed deal",sources:getSources("instant read meat thermometer")},
+    {id:2,name:"8-Blade Vegetable Chopper Dicer Multi-Function Kitchen Cutter",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:22.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"124K reviews, BSR #23. Top kitchen gadget.",src:"Seed deal",sources:getSources("vegetable chopper 8 blade")},
+    {id:3,name:"Electric Milk Frother USB Rechargeable Handheld Coffee Whisk",reviews:"28K+ · 4.5★",category:"Home & Kitchen",buyPrice:3.50,sellPrice:15.99,weightKg:0.18,salesRank:85,reviewCount:28000,rating:"4.5",bsrDrops90d:1800,estimatedSales90d:1800,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=electric+milk+frother+rechargeable",note:"28K reviews, BSR #85. Coffee trend.",src:"Seed deal",sources:getSources("electric milk frother rechargeable")},
+  ]; save(S); log('Seeded 3 proven deals'); }
 });
