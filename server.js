@@ -906,6 +906,429 @@ async function checkGmail() {
 }
 
 // ═══════════════════════════════════════
+// EDGE INTELLIGENCE — 6 strategies other sellers DON'T use
+// These give you a 1-3 week head start on trends
+// ═══════════════════════════════════════
+
+// EDGE 1: Google Trends — detect rising demand BEFORE Amazon BSR moves
+async function scanGoogleTrends() {
+  log('📈 Edge: Scanning Google Trends...');
+  const watchKeywords = [
+    'kitchen gadget','air fryer accessory','milk frother','vegetable chopper','meat thermometer',
+    'portable fan','dehumidifier','ice maker','phone holder car','led strip lights',
+    'water bottle','lunch box','resistance bands','yoga mat','pet grooming',
+    'electric toothbrush head','hair clips','makeup organiser','shower head','door stopper',
+  ];
+  const trending = [];
+  for (const kw of watchKeywords) {
+    try {
+      // Use Google Trends RSS/widget endpoint (no API key needed)
+      const res = await fetch(`https://trends.google.com/trends/api/dailytrends?hl=en-GB&tz=0&geo=GB&ns=15`);
+      const text = await res.text();
+      // Parse the response (remove JSONP wrapper)
+      const clean = text.replace(/^\)\]\}',?\n/, '');
+      const data = JSON.parse(clean);
+      const searches = data?.default?.trendingSearchesDays?.[0]?.trendingSearches || [];
+      for (const s of searches) {
+        const title = (s.title?.query || '').toLowerCase();
+        if (watchKeywords.some(w => title.includes(w.split(' ')[0]))) {
+          trending.push({
+            keyword: s.title?.query,
+            traffic: s.formattedTraffic,
+            relatedQueries: (s.relatedQueries || []).map(q => q.query).slice(0, 3),
+            source: 'google_trends',
+            detectedAt: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (e) { /* silent */ }
+    break; // One call gets all daily trends
+  }
+
+  // Also check specific product keywords via explore endpoint
+  for (const kw of watchKeywords.slice(0, 5)) {
+    try {
+      const res = await fetch(`https://trends.google.com/trends/api/realtimetrends?hl=en-GB&tz=0&cat=all&fi=0&fs=0&geo=GB&ri=300&rs=20&sort=0`);
+      const text = await res.text();
+      const clean = text.replace(/^\)\]\}',?\n/, '');
+      const data = JSON.parse(clean);
+      const stories = data?.storySummaries?.trendingStories || [];
+      for (const story of stories) {
+        const title = (story.title || '').toLowerCase();
+        const articles = story.articles || [];
+        if (watchKeywords.some(w => title.includes(w.split(' ')[0]) || articles.some(a => (a.title||'').toLowerCase().includes(w.split(' ')[0])))) {
+          trending.push({
+            keyword: story.title,
+            traffic: story.formattedTraffic || 'rising',
+            source: 'google_realtime',
+            detectedAt: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (e) { /* silent */ }
+    break;
+  }
+
+  if (trending.length) {
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.trends = trending;
+    S.edgeIntel.trendsUpdated = new Date().toISOString();
+    save(S);
+    log(`📈 Edge: ${trending.length} trending keywords found`);
+  }
+  return trending;
+}
+
+// EDGE 2: Amazon Movers & Shakers — products with BSR jump 200%+ in 24hrs
+async function scanMoversAndShakers() {
+  if (!process.env.KEEPA_API_KEY) return [];
+  log('🚀 Edge: Scanning Movers & Shakers...');
+  const movers = [];
+
+  // Use Keepa to detect BSR improvements (more reliable than scraping)
+  // Check each scan category for products with massive BSR jumps
+  for (const [catId, catName] of SCAN_CATEGORIES.slice(0, 6)) {
+    try {
+      const asins = await keepaBestSellers(catId);
+      if (!asins?.length) continue;
+
+      for (const asin of asins.slice(0, 5)) {
+        if ((S.deals || []).find(d => d.asin === asin)) continue;
+        const k = await keepa(asin);
+        if (!k?.price || !k.bsr) continue;
+
+        // Check if BSR improved dramatically (indicator of demand spike)
+        // bsrDrops90d > 100 means lots of sales happening
+        if (k.bsrDrops90d && k.bsrDrops90d > 150 && k.bsr < 5000) {
+          const sp = parseFloat(k.price);
+          if (sp < 12 || sp > 60) continue;
+          if ((k.reviewCount || 0) < 100) continue; // Lower threshold for movers
+
+          movers.push({
+            asin, name: k.title, category: catName,
+            bsr: k.bsr, bsrDrops: k.bsrDrops90d,
+            price: sp, reviewCount: k.reviewCount, rating: k.rating,
+            signal: 'mover_shaker',
+            reason: `BSR #${k.bsr} with ${k.bsrDrops90d} BSR drops in 90d — demand surging`,
+            detectedAt: new Date().toISOString(),
+          });
+          log(`🚀 Mover detected: ${k.title} — BSR #${k.bsr}, ${k.bsrDrops90d} drops`);
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  if (movers.length) {
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.movers = movers;
+    S.edgeIntel.moversUpdated = new Date().toISOString();
+    save(S);
+  }
+  log(`🚀 Edge: ${movers.length} movers detected`);
+  return movers;
+}
+
+// EDGE 3: UK Weather-Based Demand Prediction
+// Products spike with weather — act on 7-day FORECAST, not current weather
+const WEATHER_PRODUCT_MAP = [
+  { trigger: 'hot', minTemp: 25, keywords: ['portable fan','ice maker','paddling pool','sun cream','water bottle','cool box','ice cube tray','outdoor furniture'], category: 'Summer' },
+  { trigger: 'cold', maxTemp: 5, keywords: ['heated blanket','draught excluder','thermal flask','hand warmer','de-icer','ice scraper','hot water bottle','electric heater'], category: 'Winter' },
+  { trigger: 'humid', minHumidity: 80, keywords: ['dehumidifier','moisture absorber','damp trap','mould remover','dehumidifier bags'], category: 'Humidity' },
+  { trigger: 'rain', rainDays: 4, keywords: ['umbrella','waterproof phone case','rain cover','boot tray','waterproof bag','rain jacket'], category: 'Rain' },
+  { trigger: 'sunny', minUV: 5, keywords: ['sun hat','sunglasses','sun cream','beach towel','picnic blanket','garden furniture cover'], category: 'Sun' },
+];
+
+async function scanWeatherDemand() {
+  log('🌤️ Edge: Checking UK weather forecast...');
+  const alerts = [];
+  try {
+    // Open-Meteo API — free, no key needed, UK major cities
+    const cities = [
+      { name: 'London', lat: 51.51, lon: -0.13 },
+      { name: 'Manchester', lat: 53.48, lon: -2.24 },
+      { name: 'Birmingham', lat: 52.49, lon: -1.89 },
+    ];
+
+    let avgMaxTemp = 0, avgMinTemp = 0, rainDays = 0, avgHumidity = 0;
+
+    for (const city of cities) {
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_max&timezone=Europe/London&forecast_days=7`);
+      const data = await res.json();
+      if (!data.daily) continue;
+
+      const maxTemps = data.daily.temperature_2m_max || [];
+      const minTemps = data.daily.temperature_2m_min || [];
+      const precip = data.daily.precipitation_sum || [];
+      const humidity = data.daily.relative_humidity_2m_max || [];
+
+      avgMaxTemp += maxTemps.reduce((a, b) => a + b, 0) / maxTemps.length;
+      avgMinTemp += minTemps.reduce((a, b) => a + b, 0) / minTemps.length;
+      rainDays += precip.filter(p => p > 2).length;
+      avgHumidity += humidity.reduce((a, b) => a + b, 0) / humidity.length;
+    }
+
+    avgMaxTemp /= cities.length;
+    avgMinTemp /= cities.length;
+    rainDays = Math.round(rainDays / cities.length);
+    avgHumidity /= cities.length;
+
+    // Check each weather trigger
+    for (const rule of WEATHER_PRODUCT_MAP) {
+      let triggered = false;
+      let reason = '';
+
+      if (rule.trigger === 'hot' && avgMaxTemp >= rule.minTemp) {
+        triggered = true;
+        reason = `Heatwave forecast: avg ${avgMaxTemp.toFixed(0)}°C next 7 days`;
+      } else if (rule.trigger === 'cold' && avgMinTemp <= rule.maxTemp) {
+        triggered = true;
+        reason = `Cold snap forecast: avg low ${avgMinTemp.toFixed(0)}°C next 7 days`;
+      } else if (rule.trigger === 'humid' && avgHumidity >= rule.minHumidity) {
+        triggered = true;
+        reason = `High humidity forecast: ${avgHumidity.toFixed(0)}% avg next 7 days`;
+      } else if (rule.trigger === 'rain' && rainDays >= rule.rainDays) {
+        triggered = true;
+        reason = `${rainDays} rain days forecast in next 7 days`;
+      } else if (rule.trigger === 'sunny' && avgMaxTemp >= 20 && rainDays <= 1) {
+        triggered = true;
+        reason = `Sunny spell: ${avgMaxTemp.toFixed(0)}°C, only ${rainDays} rain days`;
+      }
+
+      if (triggered) {
+        alerts.push({
+          trigger: rule.trigger,
+          category: rule.category,
+          reason,
+          keywords: rule.keywords,
+          action: `Source these NOW — demand spikes in 3-7 days: ${rule.keywords.slice(0, 4).join(', ')}`,
+          detectedAt: new Date().toISOString(),
+        });
+        log(`🌤️ Weather alert: ${reason} → ${rule.keywords.slice(0, 3).join(', ')}`);
+      }
+    }
+
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.weather = {
+      avgMaxTemp: parseFloat(avgMaxTemp.toFixed(1)),
+      avgMinTemp: parseFloat(avgMinTemp.toFixed(1)),
+      rainDays,
+      avgHumidity: parseFloat(avgHumidity.toFixed(0)),
+      alerts,
+      updated: new Date().toISOString(),
+    };
+    save(S);
+  } catch (e) { log('Weather error: ' + e.message); }
+  return alerts;
+}
+
+// EDGE 4: Competitor Stock-Out Detection
+// When competitors run out during Lightning Deals, you win the Buy Box at higher prices
+async function scanStockOuts() {
+  if (!process.env.KEEPA_API_KEY) return [];
+  log('🎯 Edge: Checking competitor stock levels...');
+  const stockOuts = [];
+
+  // Check our live inventory items — are competitors disappearing?
+  const liveItems = (S.inventory || []).filter(i => i.status === 'live' && i.asin);
+  for (const item of liveItems.slice(0, 10)) {
+    try {
+      const k = await keepa(item.asin);
+      if (!k) continue;
+
+      // If seller count dropped, competitors are stocking out
+      const prevSellers = item.lastSellerCount || k.sellerCount;
+      const currentSellers = k.sellerCount || 0;
+
+      if (prevSellers && currentSellers < prevSellers && currentSellers <= 3) {
+        stockOuts.push({
+          asin: item.asin, name: item.name,
+          prevSellers, currentSellers,
+          priceBefore: item.sellPrice,
+          currentPrice: parseFloat(k.price || item.sellPrice),
+          signal: 'stock_out',
+          action: currentSellers <= 1
+            ? `You may be the ONLY seller! Consider raising price by 10-15%`
+            : `Only ${currentSellers} sellers left (was ${prevSellers}). Buy Box opportunity!`,
+          detectedAt: new Date().toISOString(),
+        });
+        log(`🎯 Stock-out: ${item.name} — sellers dropped ${prevSellers} → ${currentSellers}`);
+      }
+
+      // Update tracked seller count
+      item.lastSellerCount = currentSellers;
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) { /* silent */ }
+  }
+
+  // Also check top deals for competitor weakness
+  const topDeals = (S.deals || []).filter(d => d.asin && d.score >= 65).slice(0, 5);
+  for (const deal of topDeals) {
+    try {
+      const k = await keepa(deal.asin);
+      if (!k) continue;
+      if (k.sellerCount !== null && k.sellerCount <= 2 && !k.amazonSells) {
+        stockOuts.push({
+          asin: deal.asin, name: deal.name,
+          currentSellers: k.sellerCount,
+          signal: 'low_competition',
+          action: `Only ${k.sellerCount} FBA seller(s) — low competition, jump in now!`,
+          detectedAt: new Date().toISOString(),
+        });
+      }
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) { /* silent */ }
+  }
+
+  if (stockOuts.length) {
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.stockOuts = stockOuts;
+    S.edgeIntel.stockOutsUpdated = new Date().toISOString();
+    save(S);
+  }
+  return stockOuts;
+}
+
+// EDGE 5: Reddit Viral Product Scanner
+// r/TikTokMadeMeBuyIt — products go viral 2-4 weeks before Amazon demand spikes
+async function scanViralProducts() {
+  log('🔥 Edge: Scanning viral products (Reddit)...');
+  const viral = [];
+  try {
+    // Reddit JSON API — no auth needed for public subreddits
+    const subs = ['TikTokMadeMeBuyIt', 'AmazonFinds', 'AmazonBestSellers'];
+    for (const sub of subs) {
+      try {
+        const res = await fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=25`, {
+          headers: { 'User-Agent': 'FBABrain/1.0' },
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const posts = data?.data?.children || [];
+
+        for (const post of posts) {
+          const d = post.data;
+          if (!d || d.score < 100) continue; // Min 100 upvotes = some traction
+
+          const title = (d.title || '').toLowerCase();
+          const text = title + ' ' + (d.selftext || '').toLowerCase();
+
+          // Extract product mentions — look for product-like terms
+          const productSignals = [
+            'kitchen','gadget','cleaner','organiser','organizer','holder','light','lamp',
+            'bottle','mat','pillow','blanket','brush','tool','charger','cable','stand',
+            'bag','container','dispenser','cutter','peeler','grinder','blender','frother',
+            'fan','heater','humidifier','dehumidifier','massager','shaver','trimmer',
+          ];
+
+          const matchedSignals = productSignals.filter(s => text.includes(s));
+          if (matchedSignals.length === 0) continue;
+
+          // Extract any ASIN or Amazon link
+          const asinMatch = text.match(/\bB0[A-Z0-9]{8}\b/i) || (d.url || '').match(/\/dp\/(B0[A-Z0-9]{8})/i);
+          const amazonLink = (d.url || '').includes('amazon') ? d.url : null;
+
+          viral.push({
+            title: d.title,
+            score: d.score,
+            comments: d.num_comments,
+            subreddit: sub,
+            asin: asinMatch ? asinMatch[1] || asinMatch[0] : null,
+            amazonLink,
+            keywords: matchedSignals.slice(0, 5),
+            url: `https://reddit.com${d.permalink}`,
+            postedAt: new Date(d.created_utc * 1000).toISOString(),
+            detectedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) { /* silent — rate limited or blocked */ }
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // Sort by score (most viral first)
+    viral.sort((a, b) => b.score - a.score);
+
+    if (viral.length) {
+      S.edgeIntel = S.edgeIntel || {};
+      S.edgeIntel.viral = viral.slice(0, 20);
+      S.edgeIntel.viralUpdated = new Date().toISOString();
+      save(S);
+    }
+    log(`🔥 Edge: ${viral.length} viral products detected`);
+  } catch (e) { log('Viral scan error: ' + e.message); }
+  return viral;
+}
+
+// EDGE 6: GBP/CNY Exchange Rate Timing
+// Buy China stock when the pound is strong — saves 3-5% on large orders
+async function checkFXRate() {
+  log('💱 Edge: Checking GBP/CNY rate...');
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/GBP');
+    const data = await res.json();
+    if (!data.rates?.CNY) return null;
+
+    const rate = data.rates.CNY;
+    const usdRate = data.rates.USD;
+
+    // Store rate history (last 30 entries)
+    S.edgeIntel = S.edgeIntel || {};
+    S.edgeIntel.fxHistory = S.edgeIntel.fxHistory || [];
+    S.edgeIntel.fxHistory.push({ rate, usd: usdRate, date: new Date().toISOString() });
+    S.edgeIntel.fxHistory = S.edgeIntel.fxHistory.slice(-30);
+
+    // Calculate 7-day and 30-day averages
+    const recent = S.edgeIntel.fxHistory;
+    const avg7 = recent.slice(-7).reduce((a, b) => a + b.rate, 0) / Math.min(recent.length, 7);
+    const avg30 = recent.reduce((a, b) => a + b.rate, 0) / recent.length;
+    const percentAboveAvg = ((rate - avg30) / avg30 * 100).toFixed(1);
+
+    let signal, action;
+    if (rate > avg30 * 1.03) {
+      signal = 'strong_buy';
+      action = `GBP is ${percentAboveAvg}% above 30-day average! BUY NOW — save 3-5% on China orders`;
+    } else if (rate > avg30 * 1.01) {
+      signal = 'good';
+      action = `GBP is ${percentAboveAvg}% above average — good time to order from China`;
+    } else if (rate < avg30 * 0.97) {
+      signal = 'wait';
+      action = `GBP is ${percentAboveAvg}% below average — delay non-urgent China orders if possible`;
+    } else {
+      signal = 'neutral';
+      action = 'GBP/CNY rate is near average — order when ready';
+    }
+
+    S.edgeIntel.fx = {
+      gbpCny: parseFloat(rate.toFixed(4)),
+      gbpUsd: parseFloat(usdRate.toFixed(4)),
+      avg7: parseFloat(avg7.toFixed(4)),
+      avg30: parseFloat(avg30.toFixed(4)),
+      percentAboveAvg: parseFloat(percentAboveAvg),
+      signal, action,
+      updated: new Date().toISOString(),
+    };
+    save(S);
+    log(`💱 GBP/CNY: ${rate.toFixed(2)} (${percentAboveAvg}% vs avg) — ${signal}`);
+    return S.edgeIntel.fx;
+  } catch (e) { log('FX error: ' + e.message); return null; }
+}
+
+// EDGE INTELLIGENCE: Run all scanners
+async function runEdgeIntel() {
+  log('🧠 Edge Intelligence running all scanners...');
+  const results = {};
+  try { results.trends = await scanGoogleTrends(); } catch (e) { /* silent */ }
+  try { results.weather = await scanWeatherDemand(); } catch (e) { /* silent */ }
+  try { results.fx = await checkFXRate(); } catch (e) { /* silent */ }
+  try { results.viral = await scanViralProducts(); } catch (e) { /* silent */ }
+  // These use Keepa tokens — run separately to conserve
+  try { results.movers = await scanMoversAndShakers(); } catch (e) { /* silent */ }
+  try { results.stockOuts = await scanStockOuts(); } catch (e) { /* silent */ }
+  log('🧠 Edge Intelligence complete');
+  return results;
+}
+
+// ═══════════════════════════════════════
 // AUTO SCANNER (every 2 hours — aggressive)
 // Scans 12 Amazon UK categories for profitable products
 // ═══════════════════════════════════════
@@ -1137,6 +1560,9 @@ cron.schedule('*/2 * * * *', ()=>{ log('📧 Gmail check...'); checkGmail(); });
 cron.schedule('0 */2 * * *', ()=>autoScan()); // Scan every 2 hours
 cron.schedule('30 */2 * * *', ()=>runAutopilot()); // Autopilot every 2hr (30min after scan)
 cron.schedule('0 9 * * 1', ()=>sendDigest()); // Weekly digest Monday 9am
+cron.schedule('0 6 * * *', ()=>runEdgeIntel()); // Edge Intelligence daily 6am (before you wake up)
+cron.schedule('0 */8 * * *', ()=>checkFXRate()); // FX rate 3x/day
+cron.schedule('0 7 * * *', ()=>scanWeatherDemand()); // Weather forecast daily 7am
 cron.schedule('0 8 * * *', ()=>{
   log('📦 Inventory check...');
   (S.inventory||[]).forEach(i=>{
@@ -1166,7 +1592,7 @@ app.get('/api/state', (req,res)=>{
   res.json({deals,inventory:inv,alerts:(S.alerts||[]).slice(0,50),lastGmailCheck:S.lastGmailCheck,budget:b,
     log:(S.log||[]).slice(0,30),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
     cj:!!process.env.CJ_API_KEY,spApi:!!process.env.SP_REFRESH_TOKEN,prepAddress:!!S.prepAddress,
-    autopilot:S.autopilot,
+    autopilot:S.autopilot, edgeIntel:S.edgeIntel||{},
     sources:SOURCES.map(s=>({name:s.name,region:s.region,ship:s.ship,days:s.days}))});
 });
 
@@ -1861,6 +2287,37 @@ app.post('/api/seed', (req,res)=>{
   save(S); res.json({msg:'Seeded',count:3});
 });
 
+// ═══════════════════════════════════════
+// EDGE INTELLIGENCE ROUTES
+// ═══════════════════════════════════════
+app.get('/api/edge', (req,res)=>{
+  res.json(S.edgeIntel || {});
+});
+app.post('/api/edge/run', async(req,res)=>{
+  const results = await runEdgeIntel();
+  res.json({ msg: 'Edge Intelligence scan complete', results, intel: S.edgeIntel });
+});
+app.post('/api/edge/weather', async(req,res)=>{
+  const alerts = await scanWeatherDemand();
+  res.json({ alerts, weather: S.edgeIntel?.weather });
+});
+app.post('/api/edge/fx', async(req,res)=>{
+  const fx = await checkFXRate();
+  res.json(fx);
+});
+app.post('/api/edge/viral', async(req,res)=>{
+  const viral = await scanViralProducts();
+  res.json({ count: viral.length, viral: viral.slice(0, 20) });
+});
+app.post('/api/edge/movers', async(req,res)=>{
+  const movers = await scanMoversAndShakers();
+  res.json({ count: movers.length, movers });
+});
+app.post('/api/edge/stockouts', async(req,res)=>{
+  const stockOuts = await scanStockOuts();
+  res.json({ count: stockOuts.length, stockOuts });
+});
+
 app.get('/api/health', (req,res)=>res.json({
   status:'running',uptime:Math.round(process.uptime()),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
   deals:(S.deals||[]).length,inventory:(S.inventory||[]).length,alerts:(S.alerts||[]).length,
@@ -1869,12 +2326,14 @@ app.get('/api/health', (req,res)=>res.json({
 
 const PORT = process.env.PORT||3000;
 app.listen(PORT, ()=>{
-  console.log(`\n🧠 FBA Brain v6.0 — http://localhost:${PORT}`);
+  console.log(`\n🧠 FBA Brain v7.0 — http://localhost:${PORT}`);
   console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅':'❌'}  CJ: ${process.env.CJ_API_KEY?'✅':'❌'}  Amazon SP: ${process.env.SP_REFRESH_TOKEN?'✅':'❌'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'—'}`);
   console.log(`   🔍 Auto-scan: ${SCAN_CATEGORIES.length} categories / 2hr`);
   console.log(`   💰 CJ auto-price: every 2hr (15min offset)`);
   console.log(`   📊 Amazon sales sync: every 6hr`);
   console.log(`   💰 Price monitor: every 4hr`);
+  console.log(`   🧠 Edge Intelligence: 6 strategies / daily 6am`);
+  console.log(`   🌤️ Weather demand: daily 7am | 💱 FX rate: 3x/day`);
   console.log(`   🌍 ${SOURCES.length} sources · 8-point checks · competition analysis\n`);
   if(!S.deals?.length) { S.deals=[
     {id:1,name:"Digital Instant Read Meat Thermometer Kitchen BBQ Food Probe",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:14.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"41K reviews, BSR #47. Proven bestseller.",src:"Seed deal",sources:getSources("instant read meat thermometer")},
