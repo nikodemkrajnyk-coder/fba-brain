@@ -197,17 +197,94 @@ function getFakespotLink(asin) {
 }
 
 // Private label detection
-function detectPrivateLabel(sellerCount, brandName) {
+function detectPrivateLabel(sellerCount, brandName, amazonSells) {
+  const reasons = [];
+  let isBlocked = false;
+
   // If only 1 seller, likely private label — can't arbitrage
-  if (sellerCount && sellerCount <= 1) {
-    return { isPrivateLabel: true, message: '❌ Only 1 seller — likely private label/trademarked. Cannot arbitrage.' };
+  if (sellerCount !== null && sellerCount <= 1) {
+    isBlocked = true;
+    reasons.push('Only 1 FBA seller — likely private label/trademarked');
   }
-  // Known big brands that block resellers
-  const blockedBrands = ['apple','nike','adidas','samsung','sony','dyson','bose','lego','disney','nintendo','philips'];
+
+  // Known big brands that block resellers or are gated
+  const blockedBrands = ['apple','nike','adidas','samsung','sony','dyson','bose','lego','disney','nintendo','philips',
+    'panasonic','logitech','anker','jbl','kitchenaid','nespresso','braun','oral-b','gillette','hasbro','mattel',
+    'crocs','north face','under armour','puma','new balance'];
   if (brandName && blockedBrands.some(b => brandName.toLowerCase().includes(b))) {
-    return { isPrivateLabel: true, message: `❌ ${brandName} is a restricted brand — likely gated on Amazon` };
+    isBlocked = true;
+    reasons.push(`${brandName} is a restricted/gated brand`);
   }
-  return { isPrivateLabel: false, message: '✅ Multiple sellers — open for arbitrage' };
+
+  // Amazon as seller = they'll win Buy Box
+  if (amazonSells) {
+    reasons.push('Amazon is a direct seller — they dominate Buy Box');
+  }
+
+  if (!isBlocked && !amazonSells) {
+    if (sellerCount && sellerCount >= 2) {
+      reasons.push(`${sellerCount} FBA sellers — open for arbitrage`);
+    } else if (sellerCount === null) {
+      reasons.push('Seller data unavailable — verify manually');
+    }
+  }
+
+  return {
+    isPrivateLabel: isBlocked,
+    amazonSells: !!amazonSells,
+    message: isBlocked ? `❌ ${reasons[0]}` : (amazonSells ? `⚠️ ${reasons[0]}` : `✅ ${reasons.join('. ')}`),
+    reasons,
+  };
+}
+
+// Competition assessment
+function assessCompetition(d) {
+  let score = 100; // start perfect, deduct for risks
+  let reasons = [];
+
+  // Amazon as seller = very hard to win Buy Box
+  if (d.amazonSells) {
+    score -= 40;
+    reasons.push('Amazon is a seller — very hard to win Buy Box ❌');
+  }
+
+  // Seller count
+  const sellers = d.sellerCount || 0;
+  if (sellers === 0) {
+    reasons.push('Seller count unknown — check manually ⚠️');
+  } else if (sellers <= 2) {
+    score -= 5;
+    reasons.push(`${sellers} FBA sellers — low competition ✅`);
+  } else if (sellers <= 5) {
+    score -= 10;
+    reasons.push(`${sellers} FBA sellers — moderate competition`);
+  } else if (sellers <= 10) {
+    score -= 25;
+    reasons.push(`${sellers} FBA sellers — crowded ⚠️`);
+  } else {
+    score -= 40;
+    reasons.push(`${sellers} FBA sellers — race to bottom ❌`);
+  }
+
+  // Price stability
+  if (d.priceStability !== null) {
+    if (d.priceStability >= 85) {
+      reasons.push(`Price ${d.priceStability}% stable over 90 days ✅`);
+    } else if (d.priceStability >= 70) {
+      score -= 10;
+      reasons.push(`Price ${d.priceStability}% stable — some fluctuation ⚠️`);
+    } else {
+      score -= 25;
+      reasons.push(`Price only ${d.priceStability}% stable — volatile, margin risk ❌`);
+    }
+    if (d.priceMin90 && d.priceMax90) {
+      reasons.push(`90-day range: £${d.priceMin90} — £${d.priceMax90}`);
+    }
+  }
+
+  score = Math.max(score, 0);
+  let level = score >= 70 ? 'good' : score >= 40 ? 'moderate' : 'risky';
+  return { score, level, reasons };
 }
 
 // Seasonality check
@@ -247,7 +324,7 @@ function assessQuality(d) {
   const youtube = getYouTubeReviewLinks(d.name);
   const reviewMeta = getReviewMetaLink(d.asin);
   const fakespot = getFakespotLink(d.asin);
-  const privateLabel = detectPrivateLabel(d.sellerCount, d.brand);
+  const privateLabel = detectPrivateLabel(d.sellerCount, d.brand, d.amazonSells);
   const season = checkSeasonality(d.category, d.name);
 
   // Overall quality score (0-100)
@@ -303,62 +380,97 @@ function calcSurcharge(days, cf) {
 }
 
 function analyse(d, budget) {
-  const bp=d.buyPrice||0, sp=d.sellPrice||0, wt=d.weightKg||0.3, cat=d.category||'Home & Kitchen';
+  d._budget = budget; // pass through for storage calc
+  const bp=d.buyPrice||0, rawSp=d.sellPrice||0, wt=d.weightKg||0.3, cat=d.category||'Home & Kitchen';
+  // Realistic sell price: you rarely win Buy Box at full price — assume 3% lower
+  const sp = parseFloat((rawSp * 0.97).toFixed(2));
   const amz=calcFees(sp,wt,cat), prep=calcPrep(d.bubbleWrap||d.fragile||false);
-  const tc=parseFloat((bp+prep.t+amz.rf+amz.ff+amz.sf).toFixed(2));
+  // Import costs for China-sourced products
+  const isChina = !!(  (d.from||'').toLowerCase().match(/ali|temu|bang|dh/) || (d.buyUrl||'').match(/aliexpress|alibaba|temu|banggood|dhgate/i)  );
+  const importVAT = isChina ? parseFloat((bp * 0.20).toFixed(2)) : 0; // 20% VAT on imports
+  const importDuty = isChina ? parseFloat((bp * 0.04).toFixed(2)) : 0; // avg 2-6% duty on consumer goods
+  const shippingToPrep = isChina ? 0 : parseFloat((wt * 2.50).toFixed(2)); // UK sources: ~£2.50/kg delivery
+  // Storage: multiply by estimated months to sell
+  const salesEst = estimateSales(d.salesRank || d.bsr, cat);
+  const estMonthsToSell = salesEst.monthly > 0 ? Math.max(Math.ceil((bp>0?Math.floor((d._budget||200)/bp):10) / salesEst.monthly), 1) : 3;
+  const totalStorage = parseFloat((amz.sf * estMonthsToSell).toFixed(2));
+  const tc=parseFloat((bp+importVAT+importDuty+shippingToPrep+prep.t+amz.rf+amz.ff+totalStorage).toFixed(2));
   const pr=parseFloat((sp-tc).toFixed(2));
   const mg=sp>0?parseFloat(((pr/sp)*100).toFixed(1)):0;
   const u=bp>0?Math.floor(budget/bp):0;
   const bpr=parseFloat((u*pr).toFixed(2));
   const roi=bp>0?parseFloat(((pr/bp)*100).toFixed(0)):0;
 
-  // Demand assessment
-  const salesEst = estimateSales(d.salesRank || d.bsr, cat);
+  // Time to sell estimate (needed early for tax projection)
+  const timeToSell = salesEst.monthly > 0 ? Math.ceil(u / Math.max(salesEst.monthly, 1)) : 99;
+
+  // Demand assessment (salesEst computed above for storage calc)
   const demand = assessDemand(d.salesRank || d.bsr || 999999, d.reviewCount || 0, parseFloat(d.rating || 0), salesEst);
 
   // Quality verification
   const quality = assessQuality(d);
 
-  // Return rate impact on profit
-  const returnRate = quality.returnRate.rate / 100;
-  const returnImpact = parseFloat((pr * returnRate).toFixed(2));
-  const adjustedProfit = parseFloat((pr - returnImpact).toFixed(2));
-  const adjustedBatchProfit = parseFloat((u * adjustedProfit).toFixed(2));
+  // Competition analysis
+  const competition = assessCompetition(d);
 
-  // Tax calculations (UK self-employed)
-  const incomeTax = parseFloat((adjustedBatchProfit * 0.20).toFixed(2));
-  const nationalInsurance = parseFloat((adjustedBatchProfit * 0.09).toFixed(2));
+  // Return rate impact on profit — a return costs you the FULL product cost
+  // You refund the customer (lose sell price), keep unsellable item, and pay return processing fee
+  const returnRate = quality.returnRate.rate / 100;
+  const returnProcessingFee = 2.50; // Amazon UK return processing fee
+  const costPerReturn = tc + returnProcessingFee; // total cost of product + return fee (sell price refunded)
+  const expectedReturns = u * returnRate;
+  const returnCost = parseFloat((expectedReturns * costPerReturn).toFixed(2));
+  const adjustedBatchProfit = parseFloat((u * pr - returnCost).toFixed(2));
+  const adjustedProfit = u > 0 ? parseFloat((adjustedBatchProfit / u).toFixed(2)) : 0;
+
+  // Tax calculations (UK self-employed) — project annual profit to apply correct rates
+  // If you repeat this deal monthly for 12 months, what's the annual profit?
+  const annualProjection = adjustedBatchProfit * (12 / Math.max(timeToSell, 1));
+  const toolCostsAnnual = 100 * 12; // Keepa + tools ~£100/mo deductible
+  const taxableAnnual = Math.max(annualProjection - toolCostsAnnual, 0);
+  // Effective tax rate based on personal allowance (£12,570)
+  const effectiveTaxRate = taxableAnnual <= 12570 ? 0 : ((taxableAnnual - 12570) * 0.20) / taxableAnnual;
+  const effectiveNIRate = taxableAnnual <= 12570 ? 0 : ((taxableAnnual - 12570) * 0.09) / taxableAnnual;
+  const incomeTax = parseFloat((adjustedBatchProfit * effectiveTaxRate).toFixed(2));
+  const nationalInsurance = parseFloat((adjustedBatchProfit * effectiveNIRate).toFixed(2));
   const netAfterTax = parseFloat((adjustedBatchProfit - incomeTax - nationalInsurance).toFixed(2));
 
-  // Combined score: profit (30%) + demand (35%) + quality (35%)
+  // Combined score: profit (25%) + demand (30%) + quality (25%) + competition (20%)
   const profitScore = Math.min(Math.round(Math.min(mg*1.2,40)+Math.min(roi*0.2,30)+(pr>3?20:pr>1?10:0)+10),100);
-  const combinedScore = Math.round(profitScore * 0.30 + demand.score * 0.35 + quality.qualityScore * 0.35);
+  const combinedScore = Math.round(profitScore * 0.25 + demand.score * 0.30 + quality.qualityScore * 0.25 + competition.score * 0.20);
 
-  // Time to sell estimate
-  const timeToSell = salesEst.monthly > 0 ? Math.ceil(u / salesEst.monthly) : 99;
-
-  // Reinvestment projection
+  // Reinvestment projection — realistic with lead time + sell-through
+  // China sourcing: ~3 week lead time. UK: ~1 week. Sell-through varies.
+  const leadTimeMonths = isChina ? 1 : 0.5;
+  const cycleMonths = Math.max(timeToSell, 1) + leadTimeMonths; // order → sold out cycle
+  const cyclesPerYear = Math.min(12 / cycleMonths, 6); // max 6 cycles/year
   const reinvestment = [];
   let runningBudget = budget;
-  for (let m = 1; m <= 6; m++) {
+  let monthCursor = 0;
+  for (let c = 1; c <= Math.min(Math.ceil(cyclesPerYear), 6); c++) {
+    monthCursor += cycleMonths;
     const mUnits = Math.floor(runningBudget / (bp || 1));
-    const mProfit = mUnits * adjustedProfit;
-    const mTax = mProfit * 0.29;
+    const mGross = mUnits * pr;
+    const mReturnLoss = mUnits * returnRate * costPerReturn;
+    const mProfit = mGross - mReturnLoss;
+    const mTax = mProfit * (effectiveTaxRate + effectiveNIRate);
     const mNet = mProfit - mTax;
     runningBudget += mNet;
-    reinvestment.push({ month: m, units: mUnits, profit: parseFloat(mProfit.toFixed(2)), net: parseFloat(mNet.toFixed(2)), total: parseFloat(runningBudget.toFixed(2)) });
+    reinvestment.push({ month: parseFloat(monthCursor.toFixed(1)), cycle: c, units: mUnits, profit: parseFloat(mProfit.toFixed(2)), net: parseFloat(mNet.toFixed(2)), total: parseFloat(runningBudget.toFixed(2)) });
   }
 
   // Final recommendation — must pass ALL checks
   let rec;
   let passedChecks = 0;
-  const totalChecks = 6;
+  const totalChecks = 8;
   if (pr > 0) passedChecks++;
+  if (mg >= 15) passedChecks++; // minimum 15% margin
   if (demand.level !== 'skip') passedChecks++;
   if (quality.qualityLevel !== 'risky') passedChecks++;
   if (!quality.privateLabel.isPrivateLabel) passedChecks++;
   if (quality.season.peak) passedChecks++;
   if (quality.returnRate.rate <= 10) passedChecks++;
+  if (competition.level !== 'risky') passedChecks++;
 
   if (passedChecks === totalChecks && combinedScore >= 70)
     rec = `✅ STRONG BUY — ${u} units, ~${timeToSell}mo to sell, £${netAfterTax.toFixed(0)} net profit after tax`;
@@ -375,8 +487,10 @@ function analyse(d, budget) {
 
   return {
     ...d, amz, prep, tc, pr, mg, u, bpr, roi, score: combinedScore, profitable: pr > 0,
+    realisticSellPrice: sp, rawSellPrice: rawSp,
     demand, salesEst, timeToSell, profitScore, demandScore: demand.score,
-    quality, returnImpact, adjustedProfit, adjustedBatchProfit,
+    quality, competition, returnCost, adjustedProfit, adjustedBatchProfit,
+    importVAT, importDuty, totalStorage, isChina: !!isChina,
     incomeTax, nationalInsurance, netAfterTax, reinvestment,
     passedChecks, totalChecks, rec,
   };
@@ -404,8 +518,19 @@ async function keepa(asin) {
       }
     }
 
+    // Competition analysis
+    const sellerCount = p.offers ? p.offers.filter(o => o.condition === 1 && o.isFBA).length : null;
+    const amazonSells = p.offers ? p.offers.some(o => o.seller === 'A3P5ROKL5A1OLE') : false; // Amazon UK seller ID
+    const buyBoxSeller = st.current?.[18] > 0 ? 'FBA' : (st.current?.[0] > 0 ? 'FBM' : 'none');
+    const priceMin90 = st.min90?.[0] > 0 ? (st.min90[0]/100).toFixed(2) : null;
+    const priceMax90 = st.max90?.[0] > 0 ? (st.max90[0]/100).toFixed(2) : null;
+    const priceStability = (priceMin90 && priceMax90 && parseFloat(priceMax90) > 0)
+      ? parseFloat(((1 - (parseFloat(priceMax90) - parseFloat(priceMin90)) / parseFloat(priceMax90)) * 100).toFixed(0))
+      : null; // 100 = perfectly stable, <70 = volatile
+
     return {
       asin: p.asin, title: p.title,
+      brand: p.brand || null,
       price: st.current?.[0]>0 ? (st.current[0]/100).toFixed(2) : null,
       avg90: st.avg90?.[0]>0 ? (st.avg90[0]/100).toFixed(2) : null,
       bsr: st.current?.[3] || null,
@@ -415,7 +540,10 @@ async function keepa(asin) {
       weight: p.packageWeight ? (p.packageWeight/1000).toFixed(2) : null,
       buyBox: st.current?.[18]>0 ? (st.current[18]/100).toFixed(2) : null,
       bsrDrops90d: bsrDrops,
-      confirmedSales90d: bsrDrops, // minimum confirmed sales
+      estimatedSales90d: Math.round(bsrDrops * 1.5),
+      // Competition data
+      sellerCount, amazonSells, buyBoxSeller,
+      priceMin90, priceMax90, priceStability,
       tokens: d.tokensLeft,
     };
   } catch(e) { log('Keepa error: '+e.message); return null; }
@@ -499,12 +627,14 @@ async function checkGmail() {
               id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
               buyPrice: null, // MUST be verified — no guessing
               weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+              brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
+              priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
               reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
-              bsrDrops90d: k.bsrDrops90d, confirmedSales90d: k.confirmedSales90d,
+              bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
               reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
               from: 'Find cheapest source below', sources: getSources(k.title),
               amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-              note: `From Tactical Arbitrage alert. Amazon price: £${sp}. BSR: ${k.bsr}. ${k.confirmedSales90d}+ confirmed sales in 90 days. BUY PRICE NEEDS VERIFICATION — check all source links.`,
+              note: `From TA alert. £${sp} Amazon. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.amazonSells?' ⚠️ Amazon is a seller.':''}${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
               risks: ['Buy price not yet verified — check sources', 'Compare all 11 sources for cheapest'],
               src: `Gmail alert → Keepa API (${new Date().toLocaleDateString('en-GB')})`,
               autoFound: true, needsPrice: true,
@@ -516,7 +646,7 @@ async function checkGmail() {
             if (demand.level !== 'skip') {
               S.deals = S.deals || [];
               S.deals.unshift(deal);
-              log(`✅ Found: ${k.title} — BSR #${k.bsr}, ${k.confirmedSales90d}+ sales/90d, £${sp} Amazon`);
+              log(`✅ Found: ${k.title} — BSR #${k.bsr}, ${k.estimatedSales90d}+ sales/90d, £${sp} Amazon`);
             } else {
               log(`❌ Skipped: ${k.title} — low demand (BSR ${k.bsr})`);
             }
@@ -535,17 +665,27 @@ async function checkGmail() {
 }
 
 // ═══════════════════════════════════════
-// AUTO SCANNER (every 6 hours)
+// AUTO SCANNER (every 2 hours — aggressive)
+// Scans 12 Amazon UK categories for profitable products
 // ═══════════════════════════════════════
+const SCAN_CATEGORIES = [
+  [11052591, 'Home & Kitchen'], [560800, 'Kitchen & Home'],
+  [364301031, 'Pet Supplies'], [319530011, 'Sports & Outdoors'],
+  [77028031, 'Baby Products'], [66280031, 'Beauty'],
+  [468292, 'Toys & Games'], [65801031, 'Health & Personal Care'],
+  [3146281, 'Garden & Outdoors'], [248877031, 'DIY & Tools'],
+  [560798, 'Lighting'], [2151888031, 'Stationery & Office'],
+];
+
 async function autoScan() {
   if (!process.env.KEEPA_API_KEY) return;
-  log('🔍 Auto-scanning Amazon UK best sellers...');
-  const cats = [11052591, 560800, 364301031, 319530011, 77028031]; // Home, Kitchen, Pet, Sports, Baby
-  for (const catId of cats) {
+  log('🔍 Auto-scanning ' + SCAN_CATEGORIES.length + ' categories...');
+  let found = 0;
+  for (const [catId, catName] of SCAN_CATEGORIES) {
     try {
       const asins = await keepaBestSellers(catId);
       if (!asins?.length) continue;
-      for (const asin of asins.slice(0,5)) {
+      for (const asin of asins.slice(0,8)) {
         if ((S.deals||[]).find(d=>d.asin===asin)) continue;
         const k = await keepa(asin);
         if (!k?.price) continue;
@@ -557,35 +697,49 @@ async function autoScan() {
         if (demand.level === 'skip') continue;
         if (demand.score < 50) continue; // Only high-demand products
 
+        // Skip if Amazon is a seller — can't compete
+        if (k.amazonSells) { log(`⏭️ Skip: ${k.title} — Amazon is seller`); continue; }
+
+        // Estimate buy price: China wholesale is typically 20-35% of Amazon UK price
+        const estBuyPrice = parseFloat((sp * 0.25).toFixed(2));
+        const competition = assessCompetition(k);
+        if (competition.level === 'risky') { log(`⏭️ Skip: ${k.title} — high competition`); continue; }
+
         const deal = {
           id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
-          buyPrice: null, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+          buyPrice: null, estBuyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+          brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
+          priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
           reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
-          bsrDrops90d: k.bsrDrops90d, confirmedSales90d: k.confirmedSales90d,
+          bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
           reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
-          from: 'Find cheapest source', sources: getSources(k.title),
+          from: 'AliExpress (est.)', sources: getSources(k.title),
           amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
-          note: `Auto-found best seller. £${sp} on Amazon. BSR #${k.bsr}. ${k.confirmedSales90d}+ confirmed sales in 90 days.`,
-          risks: ['Buy price needs verification'],
-          src: `Auto-scan (${new Date().toLocaleDateString('en-GB')})`,
+          note: `Auto-found ${catName} product. £${sp} Amazon, est. buy ~£${estBuyPrice} from China. BSR #${k.bsr}. ~${k.estimatedSales90d} est. sales/90d.${k.sellerCount?' '+k.sellerCount+' FBA sellers.':''}`,
+          risks: ['Verify buy price on AliExpress/Alibaba before ordering', 'Check if product matches Amazon listing exactly'],
+          src: `Auto-scan ${catName} (${new Date().toLocaleDateString('en-GB')})`,
           autoFound: true, needsPrice: true,
+          status: 'found', // Pipeline: found → priced → ordered → prep → live → selling
         };
         S.deals = S.deals||[];
         S.deals.unshift(deal);
-        log(`✅ Auto: ${k.title} — BSR #${k.bsr}, demand score ${demand.score}`);
+        found++;
+        log(`✅ Auto: ${k.title} — £${sp} sell, ~£${estBuyPrice} buy, BSR #${k.bsr}`);
         await new Promise(r=>setTimeout(r,2000));
       }
     } catch(e) { log('Scan error: '+e.message); }
   }
+  // Clean up old deals (keep max 50)
+  if (S.deals && S.deals.length > 50) S.deals = S.deals.slice(0, 50);
   save(S);
-  log('🔍 Scan complete');
+  log(`🔍 Scan complete — ${found} new deals found`);
 }
 
 // ═══════════════════════════════════════
 // CRON
 // ═══════════════════════════════════════
 cron.schedule('*/2 * * * *', ()=>{ log('📧 Gmail check...'); checkGmail(); });
-cron.schedule('0 */6 * * *', ()=>autoScan());
+cron.schedule('0 */2 * * *', ()=>autoScan()); // Scan every 2 hours
 cron.schedule('0 8 * * *', ()=>{
   log('📦 Inventory check...');
   (S.inventory||[]).forEach(i=>{
@@ -603,7 +757,14 @@ app.get('/api/state', (req,res)=>{
   const inv = (S.inventory||[]).map(i=>{
     const days=Math.floor((Date.now()-new Date(i.dateSent).getTime())/86400000);
     const cf=Math.max((i.weightKg||0.3)*0.5,0.1);
-    return {...i,days,surcharge:calcSurcharge(days,cf)};
+    const sold = i.sold || 0;
+    const returnCount = i.returnCount || 0;
+    const remaining = Math.max((i.units||0) - sold - returnCount, 0);
+    const revenue = i.revenue || 0;
+    const totalCostIn = (i.units||0) * (i.buyPrice||0);
+    const realProfit = parseFloat((revenue - totalCostIn).toFixed(2));
+    const realROI = totalCostIn > 0 ? parseFloat(((realProfit / totalCostIn) * 100).toFixed(0)) : 0;
+    return {...i, days, surcharge:calcSurcharge(days,cf), sold, returnCount, remaining, revenue, totalCostIn, realProfit, realROI};
   });
   res.json({deals,inventory:inv,alerts:(S.alerts||[]).slice(0,50),lastGmailCheck:S.lastGmailCheck,budget:b,
     log:(S.log||[]).slice(0,30),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
@@ -636,22 +797,152 @@ app.post('/api/deals', (req,res)=>{
 });
 app.delete('/api/deals/:id', (req,res)=>{ S.deals=(S.deals||[]).filter(d=>d.id!=req.params.id); save(S); res.json({ok:true}); });
 
+// Pipeline: found → priced → ordered → prep → live → selling
+app.post('/api/deals/:id/status', (req,res)=>{
+  S.deals = (S.deals||[]).map(d=> d.id==req.params.id ? {...d, status:req.body.status} : d);
+  save(S); res.json({ok:true});
+});
+
 app.post('/api/approve/:index', (req,res)=>{
   const deal=(S.deals||[])[req.params.index];
   if(!deal) return res.status(404).json({error:'Not found'});
   if(!deal.buyPrice) return res.status(400).json({error:'Set buy price first'});
+  const units = req.body.units||Math.floor((S.budget||200)/(deal.buyPrice||1));
   S.inventory=S.inventory||[];
-  S.inventory.push({id:Date.now(),name:deal.name,units:req.body.units||Math.floor((S.budget||200)/(deal.buyPrice||1)),
-    buyPrice:deal.buyPrice,sellPrice:deal.sellPrice,weightKg:deal.weightKg,dateSent:new Date().toISOString(),status:'ordered',asin:deal.asin});
-  log(`📦 Approved: ${deal.name}`);
-  save(S); res.json({ok:true});
+  S.inventory.push({id:Date.now(),name:deal.name,units,
+    buyPrice:deal.buyPrice,sellPrice:deal.sellPrice,weightKg:deal.weightKg,
+    dateSent:new Date().toISOString(),status:'ordered',asin:deal.asin,
+    category:deal.category,from:deal.from,buyUrl:deal.buyUrl});
+  // Update deal status
+  deal.status = 'ordered';
+  log(`📦 Ordered: ${deal.name} × ${units} units`);
+  save(S); res.json({ok:true,units});
 });
 
 app.patch('/api/inventory/:id', (req,res)=>{ S.inventory=(S.inventory||[]).map(i=>i.id==req.params.id?{...i,...req.body}:i); save(S); res.json({ok:true}); });
 app.delete('/api/inventory/:id', (req,res)=>{ S.inventory=(S.inventory||[]).filter(i=>i.id!=req.params.id); save(S); res.json({ok:true}); });
 
+// Record a sale against inventory
+app.post('/api/inventory/:id/sale', (req,res)=>{
+  const {units, actualPrice} = req.body;
+  S.inventory = (S.inventory||[]).map(i => {
+    if (i.id != req.params.id) return i;
+    const sales = i.sales || [];
+    sales.push({ units: units||1, price: actualPrice||i.sellPrice, date: new Date().toISOString() });
+    const totalSold = sales.reduce((a,s) => a + s.units, 0);
+    const totalRevenue = sales.reduce((a,s) => a + (s.units * s.price), 0);
+    return { ...i, sales, sold: totalSold, revenue: parseFloat(totalRevenue.toFixed(2)) };
+  });
+  save(S); res.json({ok:true});
+});
+
+// Record a return against inventory
+app.post('/api/inventory/:id/return', (req,res)=>{
+  const {units, reason} = req.body;
+  S.inventory = (S.inventory||[]).map(i => {
+    if (i.id != req.params.id) return i;
+    const returns = i.returns || [];
+    returns.push({ units: units||1, reason: reason||'', date: new Date().toISOString() });
+    const totalReturns = returns.reduce((a,r) => a + r.units, 0);
+    return { ...i, returns, returnCount: totalReturns };
+  });
+  save(S); res.json({ok:true});
+});
+
 app.post('/api/gmail/check', async(req,res)=>res.json(await checkGmail()));
 app.post('/api/scan', async(req,res)=>{ autoScan(); res.json({msg:'Started'}); });
+
+// ═══════════════════════════════════════
+// QUICK ASIN SCAN (for iPhone in-store scanning)
+// Paste/type an ASIN → get full deal analysis instantly
+// ═══════════════════════════════════════
+app.post('/api/quick-scan', async(req,res)=>{
+  const asin = (req.body.asin||'').toUpperCase().trim();
+  if (!/^[A-Z0-9]{10}$/.test(asin)) return res.status(400).json({error:'Invalid ASIN format'});
+  const buyPrice = req.body.buyPrice ? parseFloat(req.body.buyPrice) : null;
+  const source = req.body.source || '';
+
+  // Check if we already have this deal
+  const existing = (S.deals||[]).find(d=>d.asin===asin);
+  if (existing && !buyPrice) return res.json({existing: true, deal: analyse(existing, S.budget||200)});
+
+  const k = await keepa(asin);
+  if (!k || !k.price) return res.json({error:'Product not found on Amazon UK or no price data'});
+
+  const sp = parseFloat(k.price);
+  const deal = {
+    id: Date.now()+Math.random(), name: k.title, asin, sellPrice: sp,
+    buyPrice: buyPrice, weightKg: parseFloat(k.weight||0.3), category: k.category||'Home & Kitchen',
+    brand: k.brand, sellerCount: k.sellerCount, amazonSells: k.amazonSells,
+    priceStability: k.priceStability, priceMin90: k.priceMin90, priceMax90: k.priceMax90,
+    reviewCount: k.reviewCount, rating: k.rating, salesRank: k.bsr,
+    bsrDrops90d: k.bsrDrops90d, estimatedSales90d: k.estimatedSales90d,
+    reviews: k.reviewCount ? `${(k.reviewCount/1000).toFixed(0)}K+ · ${k.rating}★` : null,
+    from: source || 'Quick scan', sources: getSources(k.title),
+    amzUrl: `https://www.amazon.co.uk/dp/${asin}`,
+    note: `Quick scan. £${sp} Amazon. BSR #${k.bsr||'?'}.${k.sellerCount?' '+k.sellerCount+' sellers.':''}`,
+    risks: buyPrice ? [] : ['Buy price not set — enter what you can buy it for'],
+    src: `Quick scan (${new Date().toLocaleDateString('en-GB')})`,
+    autoFound: false, needsPrice: !buyPrice,
+  };
+
+  // Auto-add to deals
+  S.deals = S.deals||[];
+  S.deals.unshift(deal);
+  save(S);
+  log(`🔍 Scanned: ${k.title} — £${sp} Amazon, BSR #${k.bsr}`);
+
+  const result = analyse(deal, S.budget||200);
+  res.json({deal: result, added: true});
+});
+
+// ═══════════════════════════════════════
+// PRICE MONITOR — check if competitors undercut your inventory
+// ═══════════════════════════════════════
+async function checkPrices() {
+  if (!process.env.KEEPA_API_KEY) return;
+  const inv = S.inventory || [];
+  const alerts = [];
+  for (const item of inv) {
+    if (!item.asin) continue;
+    if (item.sold >= item.units) continue; // fully sold
+    try {
+      const k = await keepa(item.asin);
+      if (!k || !k.price) continue;
+      const currentPrice = parseFloat(k.price);
+      const yourPrice = item.sellPrice || 0;
+      const priceDiff = parseFloat(((yourPrice - currentPrice) / yourPrice * 100).toFixed(0));
+
+      if (currentPrice < yourPrice * 0.95) {
+        // Price dropped more than 5%
+        const alert = `Price drop on "${item.name}": £${yourPrice.toFixed(2)} → £${currentPrice.toFixed(2)} (${priceDiff}%)`;
+        log(`🔴 ${alert}`);
+        alerts.push({ type: 'price_drop', item: item.name, asin: item.asin, was: yourPrice, now: currentPrice, diff: priceDiff });
+        // Update the sell price
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = alert;
+      } else if (currentPrice > yourPrice * 1.05) {
+        // Price went up — opportunity to raise yours
+        const alert = `Price up on "${item.name}": £${yourPrice.toFixed(2)} → £${currentPrice.toFixed(2)} (+${Math.abs(priceDiff)}%)`;
+        log(`🟢 ${alert}`);
+        alerts.push({ type: 'price_up', item: item.name, asin: item.asin, was: yourPrice, now: currentPrice, diff: priceDiff });
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = alert;
+      } else {
+        item.currentAmazonPrice = currentPrice;
+        item.priceAlert = null;
+      }
+      await new Promise(r=>setTimeout(r,2000));
+    } catch(e) { log('Price check error: '+e.message); }
+  }
+  if (alerts.length) save(S);
+  return alerts;
+}
+
+// Run price check every 4 hours
+cron.schedule('30 */4 * * *', ()=>{ log('💰 Price check...'); checkPrices(); });
+
+app.post('/api/price-check', async(req,res)=>{ const a = await checkPrices(); res.json({alerts:a, msg:`${a.length} price changes found`}); });
 
 // Quality check for a product
 app.get('/api/quality/:asin', async(req,res)=>{
@@ -765,9 +1056,9 @@ app.post('/api/fees', (req,res)=>{
 app.post('/api/seed', (req,res)=>{
   if(S.deals?.length>0) return res.json({msg:'Already seeded'});
   S.deals=[
-    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,confirmedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ confirmed sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
-    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,confirmedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ confirmed sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
-    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,confirmedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ confirmed sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
+    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
+    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,estimatedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ est. sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
+    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ est. sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
   ];
   save(S); res.json({msg:'Seeded',count:3});
 });
@@ -780,16 +1071,15 @@ app.get('/api/health', (req,res)=>res.json({
 
 const PORT = process.env.PORT||3000;
 app.listen(PORT, ()=>{
-  console.log(`\n🧠 FBA Brain v4.0 FINAL — http://localhost:${PORT}`);
-  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅':'❌'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'❌'}`);
-  console.log(`   📧 Gmail: /2min  🔍 Scan: /6hr  📦 Stock: /day`);
-  console.log(`   🔬 Quality: ReviewMeta + Return Rate + Seasonality + Private Label`);
-  console.log(`   📝 Listing Generator: Auto-titles, bullets, description, keywords`);
-  console.log(`   💰 Tax: Income tax + NI + VAT threshold tracker`);
-  console.log(`   🌍 ${SOURCES.length} global sources configured\n`);
+  console.log(`\n🧠 FBA Brain v5.0 — http://localhost:${PORT}`);
+  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅ Active':'❌ Add key!'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'—'}`);
+  console.log(`   🔍 Auto-scan: ${SCAN_CATEGORIES.length} categories / 2hr`);
+  console.log(`   💰 Price monitor: every 4hr`);
+  console.log(`   📧 Gmail: every 2min`);
+  console.log(`   🌍 ${SOURCES.length} sources · 8-point checks · competition analysis\n`);
   if(!S.deals?.length) { S.deals=[
-    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,confirmedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ confirmed sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
-    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,confirmedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ confirmed sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
-    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,confirmedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ confirmed sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
+    {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
+    {id:2,name:"Glass Olive Oil Sprayer 470ml",reviews:"38K+ · 4.4★",category:"Home & Kitchen",buyPrice:2.50,sellPrice:9.99,weightKg:0.35,bubbleWrap:true,salesRank:112,reviewCount:38000,rating:"4.4",bsrDrops90d:2200,estimatedSales90d:2200,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-olive-oil-sprayer-glass.html",amzUrl:"https://www.amazon.co.uk/s?k=olive+oil+sprayer+glass",note:"Air fryer trend. 2,200+ est. sales in 90 days.",risks:["Glass fragile","Low per-unit profit"],src:"Research 30 Mar 2026",sources:getSources("olive oil sprayer glass")},
+    {id:3,name:"8-Blade Vegetable Chopper",reviews:"124K+ · 4.5★",category:"Home & Kitchen",buyPrice:9.50,sellPrice:19.99,weightKg:0.80,salesRank:23,reviewCount:124500,rating:"4.5",bsrDrops90d:3500,estimatedSales90d:3500,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-vegetable-chopper-8-blade.html",amzUrl:"https://www.amazon.co.uk/s?k=vegetable+chopper+8+blade",note:"#1 kitchen gadget. 3,500+ est. sales in 90 days.",risks:["Fullstar dominates","Higher buy-in"],src:"Research 30 Mar 2026",sources:getSources("vegetable chopper 8 blade")},
   ]; save(S); log('Seeded 3 starter deals'); }
 });
