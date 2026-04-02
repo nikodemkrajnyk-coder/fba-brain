@@ -386,7 +386,7 @@ function analyse(d, budget) {
   const sp = parseFloat((rawSp * 0.97).toFixed(2));
   const amz=calcFees(sp,wt,cat), prep=calcPrep(d.bubbleWrap||d.fragile||false);
   // Import costs for China-sourced products
-  const isChina = (d.from||'').toLowerCase().match(/ali|temu|bang|dh/) || (d.buyUrl||'').match(/aliexpress|alibaba|temu|banggood|dhgate/i);
+  const isChina = !!(  (d.from||'').toLowerCase().match(/ali|temu|bang|dh/) || (d.buyUrl||'').match(/aliexpress|alibaba|temu|banggood|dhgate/i)  );
   const importVAT = isChina ? parseFloat((bp * 0.20).toFixed(2)) : 0; // 20% VAT on imports
   const importDuty = isChina ? parseFloat((bp * 0.04).toFixed(2)) : 0; // avg 2-6% duty on consumer goods
   const shippingToPrep = isChina ? 0 : parseFloat((wt * 2.50).toFixed(2)); // UK sources: ~£2.50/kg delivery
@@ -400,6 +400,9 @@ function analyse(d, budget) {
   const u=bp>0?Math.floor(budget/bp):0;
   const bpr=parseFloat((u*pr).toFixed(2));
   const roi=bp>0?parseFloat(((pr/bp)*100).toFixed(0)):0;
+
+  // Time to sell estimate (needed early for tax projection)
+  const timeToSell = salesEst.monthly > 0 ? Math.ceil(u / Math.max(salesEst.monthly, 1)) : 99;
 
   // Demand assessment (salesEst computed above for storage calc)
   const demand = assessDemand(d.salesRank || d.bsr || 999999, d.reviewCount || 0, parseFloat(d.rating || 0), salesEst);
@@ -435,9 +438,6 @@ function analyse(d, budget) {
   // Combined score: profit (25%) + demand (30%) + quality (25%) + competition (20%)
   const profitScore = Math.min(Math.round(Math.min(mg*1.2,40)+Math.min(roi*0.2,30)+(pr>3?20:pr>1?10:0)+10),100);
   const combinedScore = Math.round(profitScore * 0.25 + demand.score * 0.30 + quality.qualityScore * 0.25 + competition.score * 0.20);
-
-  // Time to sell estimate
-  const timeToSell = salesEst.monthly > 0 ? Math.ceil(u / salesEst.monthly) : 99;
 
   // Reinvestment projection — realistic with lead time + sell-through
   // China sourcing: ~3 week lead time. UK: ~1 week. Sell-through varies.
