@@ -1696,9 +1696,66 @@ app.post('/api/simulate', (req,res)=>{
     });
   }
 
+  // Simulate Edge Intelligence data
+  S.edgeIntel = S.edgeIntel || {};
+  S.edgeIntel.weather = {
+    avgMaxTemp: 14.2, avgMinTemp: 7.1, rainDays: 3, avgHumidity: 72,
+    alerts: [
+      { trigger: 'rain', category: 'Rain', reason: '3 rain days forecast in next 7 days',
+        keywords: ['umbrella','waterproof phone case','rain cover','boot tray','waterproof bag'],
+        action: 'Source these NOW — demand spikes in 3-7 days: umbrella, waterproof phone case, rain cover, boot tray',
+        detectedAt: new Date().toISOString() },
+    ],
+    updated: new Date().toISOString(),
+  };
+  S.edgeIntel.fx = {
+    gbpCny: 9.42, gbpUsd: 1.29, avg7: 9.35, avg30: 9.18,
+    percentAboveAvg: 2.6, signal: 'good',
+    action: 'GBP is 2.6% above 30-day average — good time to order from China',
+    updated: new Date().toISOString(),
+  };
+  S.edgeIntel.fxHistory = Array.from({length: 10}, (_, i) => ({
+    rate: 9.1 + Math.random() * 0.5, date: new Date(Date.now() - (10-i)*86400000).toISOString(),
+  }));
+  S.edgeIntel.viral = [
+    { title: 'This kitchen gadget changed my life - vegetable chopper', score: 2840, comments: 312,
+      subreddit: 'TikTokMadeMeBuyIt', keywords: ['kitchen','gadget','cutter'],
+      url: 'https://reddit.com/r/TikTokMadeMeBuyIt/example1', postedAt: new Date(Date.now()-2*86400000).toISOString(), detectedAt: new Date().toISOString() },
+    { title: 'Best Amazon find - LED motion sensor lights for stairs', score: 1560, comments: 187,
+      subreddit: 'AmazonFinds', asin: 'B0SIM00002', keywords: ['light','lamp','organiser'],
+      url: 'https://reddit.com/r/AmazonFinds/example2', postedAt: new Date(Date.now()-3*86400000).toISOString(), detectedAt: new Date().toISOString() },
+    { title: 'This portable blender is actually amazing', score: 980, comments: 142,
+      subreddit: 'TikTokMadeMeBuyIt', keywords: ['blender','bottle','gadget'],
+      url: 'https://reddit.com/r/TikTokMadeMeBuyIt/example3', postedAt: new Date(Date.now()-1*86400000).toISOString(), detectedAt: new Date().toISOString() },
+    { title: 'Under desk cable organiser tray - life changing', score: 720, comments: 95,
+      subreddit: 'AmazonBestSellers', keywords: ['organiser','holder','container'],
+      url: 'https://reddit.com/r/AmazonBestSellers/example4', postedAt: new Date(Date.now()-4*86400000).toISOString(), detectedAt: new Date().toISOString() },
+  ];
+  S.edgeIntel.viralUpdated = new Date().toISOString();
+  S.edgeIntel.movers = [
+    { asin: 'B0SIM00005', name: 'Electric Milk Frother Handheld Rechargeable USB Stainless Steel Whisk',
+      category: 'Home & Kitchen', bsr: 340, bsrDrops: 680, price: 14.99, reviewCount: 31000, rating: '4.5',
+      signal: 'mover_shaker', reason: 'BSR #340 with 680 BSR drops in 90d — demand surging', detectedAt: new Date().toISOString() },
+    { asin: 'B0SIM00002', name: 'LED Motion Sensor Night Light Rechargeable USB Warm White 3 Pack',
+      category: 'Lighting', bsr: 420, bsrDrops: 580, price: 18.99, reviewCount: 23500, rating: '4.6',
+      signal: 'mover_shaker', reason: 'BSR #420 with 580 BSR drops in 90d — demand surging', detectedAt: new Date().toISOString() },
+  ];
+  S.edgeIntel.moversUpdated = new Date().toISOString();
+  S.edgeIntel.stockOuts = [
+    { asin: 'B0SIM10003', name: 'Bamboo Chopping Board Set 3 Pack Cutting Kitchen',
+      prevSellers: 7, currentSellers: 2, signal: 'stock_out',
+      action: 'Only 2 sellers left (was 7). Buy Box opportunity!', detectedAt: new Date().toISOString() },
+  ];
+  S.edgeIntel.stockOutsUpdated = new Date().toISOString();
+  S.edgeIntel.trends = [
+    { keyword: 'portable fan USB', traffic: '50,000+', source: 'google_trends', detectedAt: new Date().toISOString() },
+    { keyword: 'kitchen organiser', traffic: '20,000+', source: 'google_realtime', detectedAt: new Date().toISOString() },
+  ];
+  S.edgeIntel.trendsUpdated = new Date().toISOString();
+
   save(S);
-  log(`🧪 Simulation: added ${added.length} deals + 3 inventory items`);
-  res.json({ ok: true, added, msg: `Added ${added.length} deals + inventory at ordered/prep/live stages` });
+  log(`🧪 Simulation: added ${added.length} deals + 3 inventory items + edge intel`);
+  res.json({ ok: true, added, msg: `Added ${added.length} deals + inventory at ordered/prep/live stages + edge intelligence data` });
 });
 
 // Set buy price for a deal (user verified)
