@@ -780,6 +780,99 @@ app.get('/api/state', (req,res)=>{
 
 app.post('/api/budget', (req,res)=>{ S.budget=req.body.budget||200; save(S); res.json({ok:true}); });
 
+// ═══════════════════════════════════════
+// SIMULATION — inject realistic test data to demo the full pipeline
+// ═══════════════════════════════════════
+app.post('/api/simulate', (req,res)=>{
+  const simDeals = [
+    { name: 'Silicone Kitchen Utensil Set 12 Piece Heat Resistant Cooking Tools', asin: 'B0SIM00001',
+      sellPrice: 24.99, buyPrice: 6.25, estBuyPrice: 6.25, weightKg: 0.8,
+      category: 'Home & Kitchen', brand: 'HomeCraft', sellerCount: 8, amazonSells: false,
+      priceStability: 85, priceMin90: '22.99', priceMax90: '26.99',
+      reviewCount: 4200, rating: 4.3, salesRank: 1850, bsrDrops90d: 180, estimatedSales90d: 180,
+      reviews: '4K+ · 4.3★' },
+    { name: 'LED Night Light Motion Sensor Rechargeable Warm White 2 Pack', asin: 'B0SIM00002',
+      sellPrice: 15.99, buyPrice: 3.50, estBuyPrice: 3.50, weightKg: 0.25,
+      category: 'Lighting', brand: 'BrightHome', sellerCount: 5, amazonSells: false,
+      priceStability: 90, priceMin90: '14.99', priceMax90: '16.99',
+      reviewCount: 8900, rating: 4.5, salesRank: 920, bsrDrops90d: 310, estimatedSales90d: 310,
+      reviews: '9K+ · 4.5★' },
+    { name: 'Stainless Steel Dog Bowl Non-Slip Rubber Base Large 2 Pack', asin: 'B0SIM00003',
+      sellPrice: 13.99, buyPrice: 3.20, estBuyPrice: 3.20, weightKg: 0.6,
+      category: 'Pet Supplies', brand: 'PetPro', sellerCount: 6, amazonSells: false,
+      priceStability: 88, priceMin90: '12.99', priceMax90: '14.99',
+      reviewCount: 6100, rating: 4.4, salesRank: 2100, bsrDrops90d: 150, estimatedSales90d: 150,
+      reviews: '6K+ · 4.4★' },
+    { name: 'Bamboo Desk Organiser with Drawer Office Storage Tidy', asin: 'B0SIM00004',
+      sellPrice: 19.99, buyPrice: 4.80, estBuyPrice: 4.80, weightKg: 0.9,
+      category: 'Stationery & Office', brand: 'DeskTidy', sellerCount: 4, amazonSells: false,
+      priceStability: 82, priceMin90: '18.99', priceMax90: '21.99',
+      reviewCount: 3200, rating: 4.2, salesRank: 3400, bsrDrops90d: 95, estimatedSales90d: 95,
+      reviews: '3K+ · 4.2★' },
+    { name: 'Resistance Bands Set 5 Pack Exercise Fitness Yoga Pilates', asin: 'B0SIM00005',
+      sellPrice: 11.99, buyPrice: 2.50, estBuyPrice: 2.50, weightKg: 0.2,
+      category: 'Sports & Outdoors', brand: 'FitBands', sellerCount: 12, amazonSells: false,
+      priceStability: 75, priceMin90: '9.99', priceMax90: '12.99',
+      reviewCount: 15000, rating: 4.4, salesRank: 650, bsrDrops90d: 420, estimatedSales90d: 420,
+      reviews: '15K+ · 4.4★' },
+  ];
+
+  S.deals = S.deals || [];
+  const added = [];
+  simDeals.forEach(sd => {
+    if (S.deals.find(d => d.asin === sd.asin)) return;
+    const deal = {
+      ...sd, id: Date.now() + Math.random(),
+      from: 'AliExpress (est.)', sources: getSources(sd.name),
+      amzUrl: `https://www.amazon.co.uk/dp/${sd.asin}`,
+      note: `Simulated deal. £${sd.sellPrice} on Amazon, buy ~£${sd.buyPrice} from China. BSR #${sd.salesRank}. ~${sd.estimatedSales90d} sales/90d.`,
+      risks: ['This is simulated test data — not a real product'],
+      src: 'Simulation', autoFound: true, needsPrice: false, status: 'found',
+    };
+    // Only add if it passes the quality bar
+    const analysed = analyse(deal, S.budget || 200);
+    if (analysed.pr > 0) {
+      S.deals.unshift(deal);
+      added.push({ name: sd.name, profit: analysed.pr, score: analysed.score, checks: `${analysed.passedChecks}/${analysed.totalChecks}` });
+    }
+  });
+
+  // Also add simulated inventory items at different pipeline stages
+  S.inventory = S.inventory || [];
+  if (!S.inventory.find(i => i.asin === 'B0SIM10001')) {
+    S.inventory.push({
+      id: Date.now()+1, name: 'Collapsible Silicone Water Bottle 500ml BPA Free', asin: 'B0SIM10001',
+      units: 40, buyPrice: 3.80, sellPrice: 16.99, weightKg: 0.3,
+      category: 'Sports & Outdoors', reviewCount: 5200,
+      dateSent: new Date(Date.now() - 5*86400000).toISOString(), status: 'ordered',
+      from: 'AliExpress', sources: getSources('Collapsible Silicone Water Bottle'),
+    });
+  }
+  if (!S.inventory.find(i => i.asin === 'B0SIM10002')) {
+    S.inventory.push({
+      id: Date.now()+2, name: 'Magnetic Phone Mount Car Dashboard Universal', asin: 'B0SIM10002',
+      units: 55, buyPrice: 2.10, sellPrice: 12.99, weightKg: 0.15,
+      category: 'DIY & Tools', reviewCount: 11000,
+      dateSent: new Date(Date.now() - 12*86400000).toISOString(), status: 'prep',
+      from: 'AliExpress', sources: getSources('Magnetic Phone Mount Car'),
+    });
+  }
+  if (!S.inventory.find(i => i.asin === 'B0SIM10003')) {
+    S.inventory.push({
+      id: Date.now()+3, name: 'Bamboo Chopping Board Set 3 Pack Cutting Kitchen', asin: 'B0SIM10003',
+      units: 30, buyPrice: 4.50, sellPrice: 18.99, weightKg: 1.2,
+      category: 'Home & Kitchen', reviewCount: 7800,
+      dateSent: new Date(Date.now() - 25*86400000).toISOString(), status: 'live',
+      sold: 8, revenue: 151.92, returnCount: 1,
+      from: 'Alibaba', sources: getSources('Bamboo Chopping Board Set'),
+    });
+  }
+
+  save(S);
+  log(`🧪 Simulation: added ${added.length} deals + 3 inventory items`);
+  res.json({ ok: true, added, msg: `Added ${added.length} deals + inventory at ordered/prep/live stages` });
+});
+
 // Set buy price for a deal (user verified)
 app.post('/api/deals/:id/price', (req,res)=>{
   S.deals = (S.deals||[]).map(d=> d.id==req.params.id ? {...d, buyPrice:req.body.buyPrice, from:req.body.from||d.from, buyUrl:req.body.buyUrl||d.buyUrl, needsPrice:false} : d);
