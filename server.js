@@ -562,6 +562,145 @@ async function keepaBestSellers(catId) {
 // ═══════════════════════════════════════
 // GLOBAL SOURCES
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// CJDROPSHIPPING API — Real China wholesale prices
+// Free API, sign up: https://cjdropshipping.com
+// ═══════════════════════════════════════
+async function cjSearch(keyword, limit = 5) {
+  const key = process.env.CJ_API_KEY;
+  if (!key) return null;
+  try {
+    // Get access token
+    const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: process.env.CJ_EMAIL, password: process.env.CJ_PASSWORD }),
+    });
+    const auth = await authRes.json();
+    if (!auth.data?.accessToken) return null;
+    const token = auth.data.accessToken;
+
+    // Search products
+    const res = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
+      body: JSON.stringify({ productNameEn: keyword, pageNum: 1, pageSize: limit }),
+    });
+    const data = await res.json();
+    if (!data.data?.list?.length) return null;
+
+    return data.data.list.map(p => ({
+      name: p.productNameEn,
+      price: parseFloat(p.sellPrice || 0),
+      image: p.productImage,
+      url: `https://cjdropshipping.com/product/${p.pid}.html`,
+      variants: (p.variants || []).map(v => ({ name: v.variantNameEn, price: parseFloat(v.variantSellPrice || 0) })),
+      shipping: p.shippingPrice || null,
+      pid: p.pid,
+    }));
+  } catch (e) { log('CJ search error: ' + e.message); return null; }
+}
+
+// Place order on CJ (ship to prep centre)
+async function cjOrder(pid, quantity, shippingAddress) {
+  const key = process.env.CJ_API_KEY;
+  if (!key) return { error: 'CJ_API_KEY not set' };
+  try {
+    const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: process.env.CJ_EMAIL, password: process.env.CJ_PASSWORD }),
+    });
+    const auth = await authRes.json();
+    const token = auth.data?.accessToken;
+    if (!token) return { error: 'Auth failed' };
+
+    const res = await fetch('https://developers.cjdropshipping.com/api2.0/v1/shopping/order/createOrder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
+      body: JSON.stringify({
+        products: [{ vid: pid, quantity }],
+        shippingAddress,
+      }),
+    });
+    return await res.json();
+  } catch (e) { return { error: e.message }; }
+}
+
+// ═══════════════════════════════════════
+// AMAZON SP-API — Auto-list products & track sales
+// Free with £25/mo seller account
+// Setup: https://developer-docs.amazon.com/sp-api
+// ═══════════════════════════════════════
+const crypto = require('crypto');
+
+async function spApiToken() {
+  if (!process.env.SP_REFRESH_TOKEN || !process.env.SP_CLIENT_ID) return null;
+  try {
+    const res = await fetch('https://api.amazon.co.uk/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: process.env.SP_REFRESH_TOKEN,
+        client_id: process.env.SP_CLIENT_ID,
+        client_secret: process.env.SP_CLIENT_SECRET,
+      }),
+    });
+    const data = await res.json();
+    return data.access_token || null;
+  } catch (e) { log('SP-API token error: ' + e.message); return null; }
+}
+
+async function spApiCall(method, endpoint, body = null) {
+  const token = await spApiToken();
+  if (!token) return null;
+  try {
+    const opts = {
+      method,
+      headers: {
+        'x-amz-access-token': token,
+        'Content-Type': 'application/json',
+      },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`https://sellingpartnerapi-eu.amazon.com${endpoint}`, opts);
+    return await res.json();
+  } catch (e) { log('SP-API error: ' + e.message); return null; }
+}
+
+// Match to existing ASIN and create offer (for arbitrage — you sell same product)
+async function spApiCreateOffer(asin, price, condition = 'new_new') {
+  const sku = `FBA-${asin}-${Date.now()}`;
+  return spApiCall('PUT', `/listings/2021-08-01/items/${process.env.SP_SELLER_ID}/${sku}`, {
+    productType: 'PRODUCT',
+    requirements: 'LISTING_OFFER_ONLY',
+    attributes: {
+      condition_type: [{ value: condition }],
+      merchant_suggested_asin: [{ value: asin }],
+      purchasable_offer: [{
+        currency: 'GBP',
+        our_price: [{ schedule: [{ value_with_tax: price }] }],
+      }],
+      fulfillment_availability: [{
+        fulfillment_channel_code: 'AMAZON_EU',
+      }],
+    },
+  });
+}
+
+// Get sales/orders for last N days
+async function spApiGetOrders(daysBack = 30) {
+  const after = new Date(Date.now() - daysBack * 86400000).toISOString();
+  return spApiCall('GET', `/orders/v0/orders?MarketplaceIds=A1F83G8C2ARO7P&CreatedAfter=${after}&FulfillmentChannels=AFN`);
+}
+
+// Get FBA inventory levels
+async function spApiGetInventory() {
+  return spApiCall('GET', '/fba/inventory/v1/summaries?details=true&granularityType=Marketplace&granularityId=A1F83G8C2ARO7P&marketplaceIds=A1F83G8C2ARO7P');
+}
+
+// Get competitive pricing for an ASIN
+async function spApiGetPricing(asin) {
+  return spApiCall('GET', `/products/pricing/v0/competitivePrice?MarketplaceId=A1F83G8C2ARO7P&Asins=${asin}&ItemType=Asin`);
+}
+
 const SOURCES = [
   { name:'AliExpress', region:'🇨🇳', ship:'Free', days:'10-20', url:q=>`https://www.aliexpress.com/w/wholesale-${encodeURIComponent(q)}.html` },
   { name:'Alibaba', region:'🇨🇳', ship:'£2-5/kg', days:'15-30', url:q=>`https://www.alibaba.com/trade/search?SearchText=${encodeURIComponent(q)}` },
@@ -775,6 +914,7 @@ app.get('/api/state', (req,res)=>{
   });
   res.json({deals,inventory:inv,alerts:(S.alerts||[]).slice(0,50),lastGmailCheck:S.lastGmailCheck,budget:b,
     log:(S.log||[]).slice(0,30),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
+    cj:!!process.env.CJ_API_KEY,spApi:!!process.env.SP_REFRESH_TOKEN,prepAddress:!!S.prepAddress,
     sources:SOURCES.map(s=>({name:s.name,region:s.region,ship:s.ship,days:s.days}))});
 });
 
@@ -1153,6 +1293,169 @@ app.post('/api/fees', (req,res)=>{
   res.json({amazon:a,prep:p,totalCost:tc,profit:pr,margin:sellPrice>0?((pr/sellPrice)*100).toFixed(1):0,salesEst});
 });
 
+// ═══════════════════════════════════════
+// CJ DROPSHIPPING ROUTES — Real China prices
+// ═══════════════════════════════════════
+app.post('/api/cj/search', async(req,res)=>{
+  const { keyword } = req.body;
+  if (!keyword) return res.status(400).json({ error: 'keyword required' });
+  const results = await cjSearch(keyword);
+  if (!results) return res.json({ error: 'CJ API not configured or no results', setup: !process.env.CJ_API_KEY });
+  res.json({ results });
+});
+
+// Get real China price for a deal and update it
+app.post('/api/deals/:id/cj-price', async(req,res)=>{
+  const deal = (S.deals||[]).find(d => d.id == req.params.id);
+  if (!deal) return res.status(404).json({ error: 'Deal not found' });
+  const keyword = (deal.name || '').split(' ').slice(0, 5).join(' ');
+  const results = await cjSearch(keyword, 3);
+  if (!results?.length) return res.json({ error: 'No CJ results found', keyword });
+
+  // Pick cheapest result
+  const cheapest = results.reduce((a, b) => a.price < b.price ? a : b);
+  deal.buyPrice = cheapest.price;
+  deal.cjProduct = cheapest;
+  deal.from = 'CJDropshipping';
+  deal.buyUrl = cheapest.url;
+  deal.needsPrice = false;
+  save(S);
+  log(`💰 CJ price: ${deal.name.slice(0,40)} → £${cheapest.price} (was est. £${deal.estBuyPrice})`);
+  res.json({ ok: true, price: cheapest.price, product: cheapest });
+});
+
+// Order via CJ Dropshipping (ships to your prep centre)
+app.post('/api/cj/order', async(req,res)=>{
+  const { dealId, quantity } = req.body;
+  const deal = (S.deals||[]).find(d => d.id == dealId);
+  if (!deal?.cjProduct) return res.status(400).json({ error: 'No CJ product linked — run CJ price check first' });
+  if (!S.prepAddress) return res.status(400).json({ error: 'Set your prep centre address first in Setup' });
+
+  const result = await cjOrder(deal.cjProduct.pid, quantity || deal.u || 10, S.prepAddress);
+  if (result.error) return res.json({ error: result.error });
+
+  // Move to inventory as ordered
+  S.inventory = S.inventory || [];
+  S.inventory.push({
+    id: Date.now(), name: deal.name, units: quantity || deal.u || 10,
+    buyPrice: deal.buyPrice, sellPrice: deal.sellPrice, weightKg: deal.weightKg,
+    dateSent: new Date().toISOString(), status: 'ordered', asin: deal.asin,
+    category: deal.category, reviewCount: deal.reviewCount,
+    from: 'CJDropshipping', cjOrderId: result.data?.orderId,
+  });
+  deal.status = 'ordered';
+  save(S);
+  log(`📦 CJ Order placed: ${deal.name.slice(0,40)} × ${quantity || deal.u} units`);
+  res.json({ ok: true, orderId: result.data?.orderId });
+});
+
+// ═══════════════════════════════════════
+// AMAZON SP-API ROUTES — Auto-list & track sales
+// ═══════════════════════════════════════
+app.post('/api/amazon/list', async(req,res)=>{
+  const { inventoryId } = req.body;
+  const item = (S.inventory||[]).find(i => i.id == inventoryId);
+  if (!item?.asin) return res.status(400).json({ error: 'No ASIN on inventory item' });
+  if (!process.env.SP_REFRESH_TOKEN) return res.json({ error: 'Amazon SP-API not configured', setup: true });
+
+  const result = await spApiCreateOffer(item.asin, item.sellPrice * 0.97); // 3% under for Buy Box
+  if (!result) return res.json({ error: 'SP-API call failed' });
+  item.amazonListed = true;
+  item.amazonSku = result.sku || `FBA-${item.asin}-${Date.now()}`;
+  item.status = 'live';
+  save(S);
+  log(`🏪 Listed on Amazon: ${item.name.slice(0,40)} @ £${(item.sellPrice * 0.97).toFixed(2)}`);
+  res.json({ ok: true, result });
+});
+
+// Sync sales from Amazon SP-API
+app.post('/api/amazon/sync-sales', async(req,res)=>{
+  if (!process.env.SP_REFRESH_TOKEN) return res.json({ error: 'Amazon SP-API not configured', setup: true });
+  const orders = await spApiGetOrders(30);
+  if (!orders?.payload?.Orders) return res.json({ error: 'No orders data', raw: orders });
+
+  let synced = 0;
+  for (const order of orders.payload.Orders) {
+    if (order.OrderStatus !== 'Shipped' && order.OrderStatus !== 'Delivered') continue;
+    // Match orders to inventory by ASIN
+    const inv = (S.inventory||[]).find(i => i.amazonSku && order.OrderItems?.some(oi => oi.SellerSKU === i.amazonSku));
+    if (inv) {
+      inv.sold = (inv.sold || 0) + 1;
+      inv.revenue = (inv.revenue || 0) + parseFloat(order.OrderTotal?.Amount || inv.sellPrice);
+      synced++;
+    }
+  }
+  if (synced) save(S);
+  log(`📊 Amazon sync: ${synced} orders matched`);
+  res.json({ ok: true, synced, totalOrders: orders.payload.Orders.length });
+});
+
+// Get live inventory from Amazon
+app.post('/api/amazon/sync-inventory', async(req,res)=>{
+  if (!process.env.SP_REFRESH_TOKEN) return res.json({ error: 'Amazon SP-API not configured', setup: true });
+  const inv = await spApiGetInventory();
+  if (!inv?.payload?.inventorySummaries) return res.json({ error: 'No inventory data' });
+  // Update local inventory with Amazon's live counts
+  let updated = 0;
+  for (const amzItem of inv.payload.inventorySummaries) {
+    const local = (S.inventory||[]).find(i => i.asin === amzItem.asin);
+    if (local) {
+      local.amazonStock = amzItem.totalQuantity;
+      local.amazonInbound = amzItem.inboundWorkingQuantity || 0;
+      updated++;
+    }
+  }
+  if (updated) save(S);
+  res.json({ ok: true, updated });
+});
+
+// Save prep centre address
+app.post('/api/prep-address', (req,res)=>{
+  S.prepAddress = req.body;
+  save(S);
+  res.json({ ok: true });
+});
+
+// Auto-sync Amazon sales every 6 hours
+cron.schedule('0 */6 * * *', async()=>{
+  if (!process.env.SP_REFRESH_TOKEN) return;
+  log('📊 Auto-syncing Amazon sales...');
+  try {
+    const orders = await spApiGetOrders(7);
+    if (orders?.payload?.Orders) {
+      let synced = 0;
+      for (const order of orders.payload.Orders) {
+        const inv = (S.inventory||[]).find(i => i.amazonSku);
+        if (inv && (order.OrderStatus === 'Shipped' || order.OrderStatus === 'Delivered')) {
+          synced++;
+        }
+      }
+      log(`📊 Auto-sync: ${synced} orders found`);
+    }
+  } catch(e) { log('Auto-sync error: '+e.message); }
+});
+
+// Auto-fetch CJ prices for new deals every scan
+cron.schedule('15 */2 * * *', async()=>{
+  if (!process.env.CJ_API_KEY) return;
+  log('💰 Auto-fetching CJ prices...');
+  const deals = (S.deals||[]).filter(d => !d.cjProduct && d.estBuyPrice);
+  for (const deal of deals.slice(0, 5)) {
+    const keyword = (deal.name || '').split(' ').slice(0, 5).join(' ');
+    const results = await cjSearch(keyword, 3);
+    if (results?.length) {
+      const cheapest = results.reduce((a, b) => a.price < b.price ? a : b);
+      deal.buyPrice = cheapest.price;
+      deal.cjProduct = cheapest;
+      deal.from = 'CJDropshipping';
+      deal.buyUrl = cheapest.url;
+      log(`💰 CJ auto-price: ${deal.name.slice(0,30)} → £${cheapest.price}`);
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  save(S);
+});
+
 app.post('/api/seed', (req,res)=>{
   if(S.deals?.length>0) return res.json({msg:'Already seeded'});
   S.deals=[
@@ -1171,11 +1474,12 @@ app.get('/api/health', (req,res)=>res.json({
 
 const PORT = process.env.PORT||3000;
 app.listen(PORT, ()=>{
-  console.log(`\n🧠 FBA Brain v5.0 — http://localhost:${PORT}`);
-  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅ Active':'❌ Add key!'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'—'}`);
+  console.log(`\n🧠 FBA Brain v6.0 — http://localhost:${PORT}`);
+  console.log(`   Keepa: ${process.env.KEEPA_API_KEY?'✅':'❌'}  CJ: ${process.env.CJ_API_KEY?'✅':'❌'}  Amazon SP: ${process.env.SP_REFRESH_TOKEN?'✅':'❌'}  Gmail: ${process.env.GMAIL_CLIENT_ID?'✅':'—'}`);
   console.log(`   🔍 Auto-scan: ${SCAN_CATEGORIES.length} categories / 2hr`);
+  console.log(`   💰 CJ auto-price: every 2hr (15min offset)`);
+  console.log(`   📊 Amazon sales sync: every 6hr`);
   console.log(`   💰 Price monitor: every 4hr`);
-  console.log(`   📧 Gmail: every 2min`);
   console.log(`   🌍 ${SOURCES.length} sources · 8-point checks · competition analysis\n`);
   if(!S.deals?.length) { S.deals=[
     {id:1,name:"Digital Instant Read Meat Thermometer",reviews:"41K+ · 4.6★",category:"Home & Kitchen",buyPrice:3.80,sellPrice:12.99,weightKg:0.12,salesRank:47,reviewCount:41000,rating:"4.6",bsrDrops90d:2700,estimatedSales90d:2700,from:"AliExpress",buyUrl:"https://www.aliexpress.com/w/wholesale-instant-read-meat-thermometer.html",amzUrl:"https://www.amazon.co.uk/s?k=instant+read+meat+thermometer",note:"Top 5 Amazon UK Kitchen. 2,700+ est. sales in 90 days.",risks:["ThermoPro dominates","10-20 day delivery"],src:"Research 30 Mar 2026",sources:getSources("instant read meat thermometer")},
