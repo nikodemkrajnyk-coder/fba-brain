@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bella Cucina | Authentic Italian Restaurant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #c8553d;
+            --dark: #1a1a2e;
+            --cream: #faf3e0;
+            --gold: #d4a574;
+            --text: #333;
+        }
+        body { font-family: 'Georgia', serif; color: var(--text); }
+
+        /* Navigation */
+        nav {
+            position: fixed; top: 0; width: 100%; z-index: 100;
+            background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px);
+            padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
+        }
+        nav .logo { color: var(--gold); font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; }
+        nav ul { list-style: none; display: flex; gap: 2rem; }
+        nav ul li a { color: #fff; text-decoration: none; font-size: 0.9rem; letter-spacing: 1px; transition: color 0.3s; }
+        nav ul li a:hover { color: var(--gold); }
+        .menu-toggle { display: none; background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+
+        /* Hero */
+        .hero {
+            height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(rgba(26,26,46,0.6), rgba(26,26,46,0.7)),
+                        url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><rect fill="%231a1a2e" width="1200" height="800"/><circle cx="200" cy="300" r="150" fill="%23c8553d" opacity="0.1"/><circle cx="900" cy="500" r="200" fill="%23d4a574" opacity="0.08"/></svg>');
+            background-size: cover; text-align: center; color: #fff;
+        }
+        .hero-content h1 { font-size: 4rem; letter-spacing: 4px; margin-bottom: 1rem; }
+        .hero-content .tagline { font-size: 1.3rem; color: var(--gold); margin-bottom: 0.5rem; font-style: italic; }
+        .hero-content .subtitle { font-size: 1rem; opacity: 0.8; margin-bottom: 2rem; }
+        .btn {
+            display: inline-block; padding: 1rem 2.5rem; background: var(--primary);
+            color: #fff; text-decoration: none; font-size: 1rem; letter-spacing: 2px;
+            border: none; cursor: pointer; transition: all 0.3s; border-radius: 2px;
+        }
+        .btn:hover { background: #a84232; transform: translateY(-2px); }
+        .btn-outline { background: transparent; border: 2px solid var(--gold); color: var(--gold); margin-left: 1rem; }
+        .btn-outline:hover { background: var(--gold); color: var(--dark); }
+
+        /* Sections */
+        section { padding: 5rem 2rem; }
+        .section-title { text-align: center; margin-bottom: 3rem; }
+        .section-title h2 { font-size: 2.5rem; color: var(--dark); margin-bottom: 0.5rem; }
+        .section-title p { color: var(--gold); font-style: italic; font-size: 1.1rem; }
+        .section-title .line { width: 60px; height: 3px; background: var(--primary); margin: 1rem auto; }
+
+        /* About */
+        .about { background: var(--cream); }
+        .about-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+        .about-image {
+            height: 400px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary), var(--gold));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 4rem; color: #fff;
+        }
+        .about-text h3 { font-size: 1.8rem; color: var(--dark); margin-bottom: 1rem; }
+        .about-text p { line-height: 1.8; color: #555; margin-bottom: 1rem; }
+
+        /* Menu */
+        .menu-section { background: var(--dark); color: #fff; }
+        .menu-section .section-title h2 { color: #fff; }
+        .menu-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .menu-category h3 { color: var(--gold); font-size: 1.4rem; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(212,165,116,0.3); padding-bottom: 0.5rem; }
+        .menu-item { display: flex; justify-content: space-between; margin-bottom: 1.2rem; }
+        .menu-item .name { font-size: 1rem; }
+        .menu-item .desc { font-size: 0.85rem; opacity: 0.6; margin-top: 0.2rem; }
+        .menu-item .price { color: var(--gold); font-weight: bold; white-space: nowrap; margin-left: 1rem; }
+
+        /* Specials */
+        .specials { background: var(--cream); }
+        .specials-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .special-card {
+            background: #fff; border-radius: 8px; overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: transform 0.3s;
+        }
+        .special-card:hover { transform: translateY(-5px); }
+        .special-img {
+            height: 200px; display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; color: #fff;
+        }
+        .special-card:nth-child(1) .special-img { background: linear-gradient(135deg, #c8553d, #e8795f); }
+        .special-card:nth-child(2) .special-img { background: linear-gradient(135deg, #d4a574, #e8c99b); }
+        .special-card:nth-child(3) .special-img { background: linear-gradient(135deg, #1a1a2e, #3a3a5e); }
+        .special-card .content { padding: 1.5rem; }
+        .special-card h3 { color: var(--dark); margin-bottom: 0.5rem; }
+        .special-card p { color: #666; font-size: 0.9rem; line-height: 1.6; }
+        .special-card .price-tag { color: var(--primary); font-weight: bold; font-size: 1.2rem; margin-top: 0.5rem; }
+
+        /* Testimonials */
+        .testimonials { background: #fff; }
+        .testimonial-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .testimonial {
+            padding: 2rem; background: var(--cream); border-radius: 8px;
+            text-align: center; border-left: 4px solid var(--gold);
+        }
+        .testimonial .stars { color: var(--gold); font-size: 1.2rem; margin-bottom: 1rem; }
+        .testimonial p { font-style: italic; line-height: 1.6; color: #555; margin-bottom: 1rem; }
+        .testimonial .author { font-weight: bold; color: var(--dark); }
+
+        /* Hours & Location */
+        .info { background: var(--dark); color: #fff; }
+        .info-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+        .info h3 { color: var(--gold); font-size: 1.3rem; margin-bottom: 1.5rem; }
+        .hours-list { list-style: none; }
+        .hours-list li { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .contact-info p { margin-bottom: 1rem; line-height: 1.6; }
+        .contact-info a { color: var(--gold); text-decoration: none; }
+
+        /* Reservation */
+        .reservation { background: var(--cream); }
+        .reservation form { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .reservation input, .reservation select, .reservation textarea {
+            padding: 1rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem;
+            font-family: inherit; background: #fff;
+        }
+        .reservation textarea { grid-column: span 2; min-height: 100px; resize: vertical; }
+        .reservation .btn { grid-column: span 2; justify-self: center; }
+
+        /* Footer */
+        footer {
+            background: #111; color: #888; text-align: center; padding: 2rem;
+            font-size: 0.9rem;
+        }
+        footer a { color: var(--gold); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav ul { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: var(--dark); flex-direction: column; padding: 1rem 2rem; }
+            nav ul.active { display: flex; }
+            .menu-toggle { display: block; }
+            .hero-content h1 { font-size: 2.5rem; }
+            .about-grid, .menu-grid, .specials-grid, .testimonial-grid, .info-grid { grid-template-columns: 1fr; }
+            .reservation form { grid-template-columns: 1fr; }
+            .reservation textarea, .reservation .btn { grid-column: span 1; }
+            .btn-outline { margin-left: 0; margin-top: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="logo">BELLA CUCINA</div>
+        <button class="menu-toggle" onclick="document.querySelector('nav ul').classList.toggle('active')">&#9776;</button>
+        <ul>
+            <li><a href="#about">About</a></li>
+            <li><a href="#menu">Menu</a></li>
+            <li><a href="#specials">Specials</a></li>
+            <li><a href="#reviews">Reviews</a></li>
+            <li><a href="#visit">Visit</a></li>
+            <li><a href="#reservation">Book a Table</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <p class="tagline">Authentic Italian Dining</p>
+            <h1>BELLA CUCINA</h1>
+            <p class="subtitle">Handmade pasta, wood-fired pizza, and the finest Italian wines in the heart of London</p>
+            <a href="#reservation" class="btn">Book a Table</a>
+            <a href="#menu" class="btn btn-outline">View Menu</a>
+        </div>
+    </section>
+
+    <!-- About -->
+    <section class="about" id="about">
+        <div class="section-title">
+            <h2>Our Story</h2>
+            <div class="line"></div>
+            <p>A family tradition since 1998</p>
+        </div>
+        <div class="about-grid">
+            <div class="about-image">&#127837;</div>
+            <div class="about-text">
+                <h3>From Naples to London</h3>
+                <p>Founded by Chef Marco Rossi, Bella Cucina brings the authentic flavours of Southern Italy to the heart of London. Every dish is crafted with love, using recipes passed down through three generations of the Rossi family.</p>
+                <p>We source our ingredients directly from small Italian farms — from San Marzano tomatoes to buffalo mozzarella from Campania. Our pasta is made fresh daily, and our pizzas are baked in a traditional wood-fired oven imported from Naples.</p>
+                <p>Whether you're joining us for a romantic dinner, a family celebration, or a casual lunch, we promise an unforgettable dining experience.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Menu -->
+    <section class="menu-section" id="menu">
+        <div class="section-title">
+            <h2>Our Menu</h2>
+            <div class="line"></div>
+            <p>Fresh ingredients, timeless recipes</p>
+        </div>
+        <div class="menu-grid">
+            <div class="menu-category">
+                <h3>Antipasti</h3>
+                <div class="menu-item">
+                    <div><div class="name">Bruschetta Classica</div><div class="desc">Toasted ciabatta, fresh tomatoes, basil</div></div>
+                    <div class="price">£8.50</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Burrata e Prosciutto</div><div class="desc">Creamy burrata, Parma ham, rocket</div></div>
+                    <div class="price">£12.00</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Calamari Fritti</div><div class="desc">Crispy squid, lemon aioli</div></div>
+                    <div class="price">£10.50</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Arancini</div><div class="desc">Saffron risotto balls, truffle mayo</div></div>
+                    <div class="price">£9.00</div>
+                </div>
+            </div>
+            <div class="menu-category">
+                <h3>Pasta & Risotto</h3>
+                <div class="menu-item">
+                    <div><div class="name">Spaghetti Carbonara</div><div class="desc">Guanciale, pecorino, free-range egg</div></div>
+                    <div class="price">£14.50</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Pappardelle al Ragù</div><div class="desc">Slow-cooked beef, fresh pappardelle</div></div>
+                    <div class="price">£16.00</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Risotto ai Funghi</div><div class="desc">Wild mushrooms, truffle oil, parmesan</div></div>
+                    <div class="price">£15.00</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Linguine alle Vongole</div><div class="desc">Fresh clams, white wine, garlic</div></div>
+                    <div class="price">£17.50</div>
+                </div>
+            </div>
+            <div class="menu-category">
+                <h3>Pizza</h3>
+                <div class="menu-item">
+                    <div><div class="name">Margherita D.O.P.</div><div class="desc">San Marzano, fior di latte, fresh basil</div></div>
+                    <div class="price">£11.00</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Diavola</div><div class="desc">Spicy salami, chilli, mozzarella</div></div>
+                    <div class="price">£13.50</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Quattro Formaggi</div><div class="desc">Mozzarella, gorgonzola, fontina, parmesan</div></div>
+                    <div class="price">£14.00</div>
+                </div>
+            </div>
+            <div class="menu-category">
+                <h3>Dolci</h3>
+                <div class="menu-item">
+                    <div><div class="name">Tiramisu</div><div class="desc">Classic recipe, mascarpone, espresso</div></div>
+                    <div class="price">£8.00</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Panna Cotta</div><div class="desc">Vanilla bean, berry compote</div></div>
+                    <div class="price">£7.50</div>
+                </div>
+                <div class="menu-item">
+                    <div><div class="name">Affogato</div><div class="desc">Gelato, hot espresso, amaretto</div></div>
+                    <div class="price">£6.50</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Specials -->
+    <section class="specials" id="specials">
+        <div class="section-title">
+            <h2>Chef's Specials</h2>
+            <div class="line"></div>
+            <p>This week's featured dishes</p>
+        </div>
+        <div class="specials-grid">
+            <div class="special-card">
+                <div class="special-img">&#127835;</div>
+                <div class="content">
+                    <h3>Osso Buco Milanese</h3>
+                    <p>Slow-braised veal shank with saffron risotto and gremolata. A true Milanese classic, cooked for 4 hours until meltingly tender.</p>
+                    <div class="price-tag">£24.00</div>
+                </div>
+            </div>
+            <div class="special-card">
+                <div class="special-img">&#127836;</div>
+                <div class="content">
+                    <h3>Lobster Ravioli</h3>
+                    <p>Handmade ravioli filled with fresh lobster, served in a bisque sauce with cherry tomatoes and basil oil.</p>
+                    <div class="price-tag">£22.00</div>
+                </div>
+            </div>
+            <div class="special-card">
+                <div class="special-img">&#127856;</div>
+                <div class="content">
+                    <h3>Torta Caprese</h3>
+                    <p>Flourless chocolate and almond cake from the island of Capri, served warm with vanilla gelato.</p>
+                    <div class="price-tag">£9.50</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials" id="reviews">
+        <div class="section-title">
+            <h2>What Our Guests Say</h2>
+            <div class="line"></div>
+            <p>Over 2,000 five-star reviews</p>
+        </div>
+        <div class="testimonial-grid">
+            <div class="testimonial">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"The best Italian food I've had outside of Italy. The carbonara was absolute perfection — creamy, rich, and authentic."</p>
+                <div class="author">— Sarah M.</div>
+            </div>
+            <div class="testimonial">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"We celebrated our anniversary here and it was magical. The staff were wonderful, the wine list is superb, and the tiramisu is to die for."</p>
+                <div class="author">— James & Kate R.</div>
+            </div>
+            <div class="testimonial">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"Finally, a restaurant that does proper Neapolitan pizza in London. The wood-fired oven makes all the difference. We come every week now!"</p>
+                <div class="author">— David L.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Hours & Info -->
+    <section class="info" id="visit">
+        <div class="section-title">
+            <h2>Visit Us</h2>
+            <div class="line"></div>
+            <p>We'd love to welcome you</p>
+        </div>
+        <div class="info-grid">
+            <div>
+                <h3>Opening Hours</h3>
+                <ul class="hours-list">
+                    <li><span>Monday</span><span>12:00 – 22:00</span></li>
+                    <li><span>Tuesday</span><span>12:00 – 22:00</span></li>
+                    <li><span>Wednesday</span><span>12:00 – 22:00</span></li>
+                    <li><span>Thursday</span><span>12:00 – 22:30</span></li>
+                    <li><span>Friday</span><span>12:00 – 23:00</span></li>
+                    <li><span>Saturday</span><span>11:00 – 23:00</span></li>
+                    <li><span>Sunday</span><span>11:00 – 21:00</span></li>
+                </ul>
+            </div>
+            <div class="contact-info">
+                <h3>Find Us</h3>
+                <p>42 High Street<br>Covent Garden<br>London WC2E 8LJ</p>
+                <p>Phone: <a href="tel:02071234567">020 7123 4567</a></p>
+                <p>Email: <a href="mailto:hello@bellacucina.co.uk">hello@bellacucina.co.uk</a></p>
+                <p style="margin-top: 1.5rem;">
+                    <a href="#" style="color: var(--gold); margin-right: 1rem;">Instagram</a>
+                    <a href="#" style="color: var(--gold); margin-right: 1rem;">Facebook</a>
+                    <a href="#" style="color: var(--gold);">TripAdvisor</a>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reservation -->
+    <section class="reservation" id="reservation">
+        <div class="section-title">
+            <h2>Book a Table</h2>
+            <div class="line"></div>
+            <p>Reserve your spot for an unforgettable evening</p>
+        </div>
+        <form onsubmit="event.preventDefault(); alert('Thank you! We will confirm your reservation shortly.');">
+            <input type="text" placeholder="Full Name" required>
+            <input type="email" placeholder="Email Address" required>
+            <input type="tel" placeholder="Phone Number" required>
+            <input type="number" placeholder="Number of Guests" min="1" max="20" required>
+            <input type="date" required>
+            <select required>
+                <option value="">Select Time</option>
+                <option>12:00</option><option>12:30</option><option>13:00</option><option>13:30</option>
+                <option>18:00</option><option>18:30</option><option>19:00</option><option>19:30</option>
+                <option>20:00</option><option>20:30</option><option>21:00</option>
+            </select>
+            <textarea placeholder="Special requests (allergies, celebrations, etc.)"></textarea>
+            <button type="submit" class="btn">Reserve Now</button>
+        </form>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2026 Bella Cucina. All rights reserved. | <a href="#">Privacy Policy</a> | <a href="#">Terms</a></p>
+    </footer>
+</body>
+</html>

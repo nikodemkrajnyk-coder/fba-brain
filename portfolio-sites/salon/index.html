@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glow Studio | Hair & Beauty Salon London</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #b8860b;
+            --rose: #e8c4c4;
+            --blush: #f5e6e0;
+            --dark: #2c2c2c;
+            --cream: #fdf8f4;
+            --text: #444;
+        }
+        body { font-family: 'Georgia', 'Times New Roman', serif; color: var(--text); }
+
+        /* Nav */
+        nav {
+            position: fixed; top: 0; width: 100%; z-index: 100;
+            background: rgba(255,255,255,0.97); backdrop-filter: blur(10px);
+            padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(184,134,11,0.15);
+        }
+        .logo { font-size: 1.6rem; font-weight: 700; color: var(--dark); letter-spacing: 3px; }
+        .logo span { color: var(--primary); }
+        nav ul { list-style: none; display: flex; gap: 2rem; align-items: center; }
+        nav ul li a { color: var(--dark); text-decoration: none; font-size: 0.9rem; letter-spacing: 1px; transition: color 0.3s; }
+        nav ul li a:hover { color: var(--primary); }
+        .nav-book { background: var(--primary); color: #fff !important; padding: 0.6rem 1.5rem; border-radius: 2px; letter-spacing: 1px; }
+        .nav-book:hover { background: #9a7209 !important; }
+        .menu-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--dark); }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, var(--cream), var(--blush), var(--rose));
+            text-align: center; padding: 6rem 2rem;
+        }
+        .hero-content { max-width: 700px; }
+        .hero .eyebrow { font-size: 0.85rem; letter-spacing: 4px; color: var(--primary); text-transform: uppercase; margin-bottom: 1.5rem; }
+        .hero h1 { font-size: 4rem; color: var(--dark); line-height: 1.1; margin-bottom: 1.5rem; font-weight: 400; }
+        .hero h1 em { font-style: italic; color: var(--primary); }
+        .hero p { font-size: 1.15rem; color: #666; line-height: 1.8; margin-bottom: 2.5rem; }
+        .btn { display: inline-block; padding: 1rem 2.5rem; font-size: 0.9rem; letter-spacing: 2px; text-decoration: none; transition: all 0.3s; cursor: pointer; border: none; font-family: inherit; }
+        .btn-gold { background: var(--primary); color: #fff; }
+        .btn-gold:hover { background: #9a7209; transform: translateY(-2px); }
+        .btn-outline { border: 2px solid var(--dark); color: var(--dark); background: transparent; margin-left: 1rem; }
+        .btn-outline:hover { background: var(--dark); color: #fff; }
+
+        /* Sections */
+        section { padding: 5rem 2rem; }
+        .section-header { text-align: center; max-width: 600px; margin: 0 auto 3.5rem; }
+        .section-header .label { font-size: 0.8rem; letter-spacing: 3px; color: var(--primary); text-transform: uppercase; margin-bottom: 0.8rem; }
+        .section-header h2 { font-size: 2.5rem; color: var(--dark); font-weight: 400; margin-bottom: 1rem; }
+        .section-header p { color: #888; line-height: 1.7; }
+        .divider { width: 50px; height: 2px; background: var(--primary); margin: 1rem auto; }
+
+        /* Services */
+        .services { background: #fff; }
+        .services-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; }
+        .service-card { text-align: center; padding: 2.5rem 1.5rem; border: 1px solid #f0e8e0; transition: all 0.3s; }
+        .service-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(184,134,11,0.08); }
+        .service-card .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        .service-card h3 { color: var(--dark); font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .service-card p { color: #888; font-size: 0.9rem; line-height: 1.6; margin-bottom: 1rem; }
+        .service-card .from { color: var(--primary); font-weight: 700; font-size: 1.1rem; }
+
+        /* Price List */
+        .pricing { background: var(--cream); }
+        .price-grid { max-width: 800px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+        .price-category h3 { color: var(--primary); font-size: 1.3rem; margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--rose); }
+        .price-item { display: flex; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px dotted #ddd; }
+        .price-item .name { color: var(--dark); }
+        .price-item .duration { font-size: 0.8rem; color: #999; }
+        .price-item .cost { color: var(--primary); font-weight: 700; }
+
+        /* Gallery / Looks */
+        .gallery { background: #fff; }
+        .gallery-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .gallery-item {
+            aspect-ratio: 1; border-radius: 8px; display: flex; align-items: center;
+            justify-content: center; font-size: 2.5rem; color: #fff; transition: transform 0.3s; cursor: pointer;
+        }
+        .gallery-item:hover { transform: scale(1.05); }
+        .gallery-item:nth-child(1) { background: linear-gradient(135deg, #e8c4c4, #d4a0a0); }
+        .gallery-item:nth-child(2) { background: linear-gradient(135deg, #d4a574, #c49464); }
+        .gallery-item:nth-child(3) { background: linear-gradient(135deg, #b8860b, #d4a030); }
+        .gallery-item:nth-child(4) { background: linear-gradient(135deg, #2c2c2c, #555); }
+        .gallery-item:nth-child(5) { background: linear-gradient(135deg, #c49464, #b8860b); }
+        .gallery-item:nth-child(6) { background: linear-gradient(135deg, #d4a0a0, #e8c4c4); }
+        .gallery-item:nth-child(7) { background: linear-gradient(135deg, #555, #2c2c2c); }
+        .gallery-item:nth-child(8) { background: linear-gradient(135deg, #d4a030, #b8860b); }
+
+        /* Team */
+        .team { background: var(--cream); }
+        .team-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .team-card { text-align: center; }
+        .team-photo {
+            width: 180px; height: 180px; border-radius: 50%; margin: 0 auto 1.5rem;
+            display: flex; align-items: center; justify-content: center; font-size: 3rem;
+        }
+        .team-card:nth-child(1) .team-photo { background: linear-gradient(135deg, var(--rose), var(--blush)); }
+        .team-card:nth-child(2) .team-photo { background: linear-gradient(135deg, var(--blush), var(--cream)); }
+        .team-card:nth-child(3) .team-photo { background: linear-gradient(135deg, #d4a574, #e8c99b); }
+        .team-card h3 { color: var(--dark); margin-bottom: 0.3rem; }
+        .team-card .role { color: var(--primary); font-style: italic; font-size: 0.9rem; margin-bottom: 0.8rem; }
+        .team-card p { color: #888; font-size: 0.85rem; line-height: 1.6; }
+
+        /* Reviews */
+        .reviews { background: #fff; }
+        .reviews-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .review { padding: 2rem; background: var(--cream); border-radius: 4px; text-align: center; }
+        .review .stars { color: var(--primary); font-size: 1.2rem; margin-bottom: 1rem; }
+        .review p { font-style: italic; line-height: 1.7; color: #666; margin-bottom: 1rem; }
+        .review .name { font-weight: 700; color: var(--dark); font-size: 0.9rem; }
+
+        /* Booking CTA */
+        .booking-cta {
+            background: linear-gradient(135deg, var(--dark), #444);
+            color: #fff; text-align: center; padding: 5rem 2rem;
+        }
+        .booking-cta h2 { font-size: 2.5rem; font-weight: 400; margin-bottom: 1rem; }
+        .booking-cta p { font-size: 1.1rem; opacity: 0.7; margin-bottom: 2rem; max-width: 500px; margin-left: auto; margin-right: auto; }
+        .booking-cta .btn-gold { font-size: 1.1rem; padding: 1.2rem 3rem; }
+
+        /* Contact */
+        .contact { background: var(--cream); }
+        .contact-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+        .contact form { display: flex; flex-direction: column; gap: 1rem; }
+        .contact input, .contact select, .contact textarea {
+            padding: 1rem; border: 1px solid #e0d5cc; border-radius: 4px; font-size: 1rem;
+            font-family: inherit; background: #fff; transition: border-color 0.3s;
+        }
+        .contact input:focus, .contact select:focus, .contact textarea:focus { border-color: var(--primary); outline: none; }
+        .contact textarea { min-height: 100px; resize: vertical; }
+        .salon-info h3 { color: var(--dark); font-size: 1.4rem; margin-bottom: 1.5rem; }
+        .salon-info .info-item { margin-bottom: 1.5rem; }
+        .salon-info .info-item .icon { font-size: 1.3rem; margin-right: 0.5rem; }
+        .salon-info .info-item strong { color: var(--dark); display: block; margin-bottom: 0.3rem; }
+        .salon-info .info-item p { color: #666; line-height: 1.6; }
+        .salon-info a { color: var(--primary); text-decoration: none; }
+
+        /* Footer */
+        footer {
+            background: var(--dark); color: rgba(255,255,255,0.5); text-align: center;
+            padding: 2rem; font-size: 0.85rem;
+        }
+        footer a { color: var(--primary); text-decoration: none; }
+
+        @media (max-width: 768px) {
+            nav ul { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: #fff; flex-direction: column; padding: 1rem 2rem; }
+            nav ul.active { display: flex; }
+            .menu-toggle { display: block; }
+            .hero h1 { font-size: 2.5rem; }
+            .services-grid, .team-grid, .reviews-grid { grid-template-columns: 1fr; }
+            .price-grid, .contact-grid { grid-template-columns: 1fr; }
+            .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+            .btn-outline { margin-left: 0; margin-top: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Nav -->
+    <nav>
+        <div class="logo">GLOW <span>STUDIO</span></div>
+        <button class="menu-toggle" onclick="document.querySelector('nav ul').classList.toggle('active')">&#9776;</button>
+        <ul>
+            <li><a href="#services">Services</a></li>
+            <li><a href="#prices">Prices</a></li>
+            <li><a href="#gallery">Gallery</a></li>
+            <li><a href="#team">Team</a></li>
+            <li><a href="#reviews">Reviews</a></li>
+            <li><a href="#contact">Contact</a></li>
+            <li><a href="#book" class="nav-book">Book Now</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <p class="eyebrow">Hair &bull; Beauty &bull; Wellness</p>
+            <h1>Where <em>Beauty</em> Meets Expertise</h1>
+            <p>Award-winning hair and beauty salon in the heart of Chelsea. From precision cuts to luxury treatments, our expert stylists create looks that make you feel extraordinary.</p>
+            <a href="#book" class="btn btn-gold">Book Appointment</a>
+            <a href="#prices" class="btn btn-outline">View Prices</a>
+        </div>
+    </section>
+
+    <!-- Services -->
+    <section class="services" id="services">
+        <div class="section-header">
+            <div class="label">What We Do</div>
+            <h2>Our Services</h2>
+            <div class="divider"></div>
+            <p>From classic cuts to the latest colour techniques, we offer a full range of hair and beauty services</p>
+        </div>
+        <div class="services-grid">
+            <div class="service-card">
+                <div class="icon">&#9988;</div>
+                <h3>Hair Cutting & Styling</h3>
+                <p>Precision cuts, blowouts, and occasion styling by our award-winning team of senior stylists.</p>
+                <div class="from">From £45</div>
+            </div>
+            <div class="service-card">
+                <div class="icon">&#127912;</div>
+                <h3>Colour & Highlights</h3>
+                <p>Balayage, ombr&eacute;, full colour, and highlights using premium Olaplex and Wella products.</p>
+                <div class="from">From £85</div>
+            </div>
+            <div class="service-card">
+                <div class="icon">&#10024;</div>
+                <h3>Hair Treatments</h3>
+                <p>Keratin smoothing, deep conditioning, bond repair, and scalp treatments for healthier, stronger hair.</p>
+                <div class="from">From £55</div>
+            </div>
+            <div class="service-card">
+                <div class="icon">&#128133;</div>
+                <h3>Nails</h3>
+                <p>Gel manicures, pedicures, nail art, and extensions. Walk-ins welcome for express treatments.</p>
+                <div class="from">From £25</div>
+            </div>
+            <div class="service-card">
+                <div class="icon">&#128142;</div>
+                <h3>Facials & Skincare</h3>
+                <p>Bespoke facials, microdermabrasion, and LED light therapy tailored to your skin type.</p>
+                <div class="from">From £60</div>
+            </div>
+            <div class="service-card">
+                <div class="icon">&#128171;</div>
+                <h3>Bridal & Events</h3>
+                <p>Complete bridal packages including trials, hair, makeup, and on-location services for your big day.</p>
+                <div class="from">From £250</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="prices">
+        <div class="section-header">
+            <div class="label">Pricing</div>
+            <h2>Our Price List</h2>
+            <div class="divider"></div>
+        </div>
+        <div class="price-grid">
+            <div class="price-category">
+                <h3>Hair</h3>
+                <div class="price-item"><div><div class="name">Ladies Cut & Blow Dry</div><div class="duration">60 min</div></div><div class="cost">£65</div></div>
+                <div class="price-item"><div><div class="name">Gents Cut</div><div class="duration">30 min</div></div><div class="cost">£35</div></div>
+                <div class="price-item"><div><div class="name">Blow Dry & Style</div><div class="duration">45 min</div></div><div class="cost">£45</div></div>
+                <div class="price-item"><div><div class="name">Full Colour</div><div class="duration">90 min</div></div><div class="cost">£95</div></div>
+                <div class="price-item"><div><div class="name">Half Head Highlights</div><div class="duration">90 min</div></div><div class="cost">£110</div></div>
+                <div class="price-item"><div><div class="name">Full Head Highlights</div><div class="duration">120 min</div></div><div class="cost">£150</div></div>
+                <div class="price-item"><div><div class="name">Balayage</div><div class="duration">150 min</div></div><div class="cost">£180</div></div>
+                <div class="price-item"><div><div class="name">Keratin Treatment</div><div class="duration">120 min</div></div><div class="cost">£200</div></div>
+            </div>
+            <div class="price-category">
+                <h3>Beauty</h3>
+                <div class="price-item"><div><div class="name">Gel Manicure</div><div class="duration">45 min</div></div><div class="cost">£35</div></div>
+                <div class="price-item"><div><div class="name">Gel Pedicure</div><div class="duration">60 min</div></div><div class="cost">£40</div></div>
+                <div class="price-item"><div><div class="name">Express Facial</div><div class="duration">30 min</div></div><div class="cost">£45</div></div>
+                <div class="price-item"><div><div class="name">Luxury Facial</div><div class="duration">60 min</div></div><div class="cost">£85</div></div>
+                <div class="price-item"><div><div class="name">Eyebrow Shape & Tint</div><div class="duration">20 min</div></div><div class="cost">£25</div></div>
+                <div class="price-item"><div><div class="name">Lash Lift & Tint</div><div class="duration">45 min</div></div><div class="cost">£55</div></div>
+                <div class="price-item"><div><div class="name">Full Leg Wax</div><div class="duration">30 min</div></div><div class="cost">£35</div></div>
+                <div class="price-item"><div><div class="name">Bridal Package</div><div class="duration">Half day</div></div><div class="cost">£350</div></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Gallery -->
+    <section class="gallery" id="gallery">
+        <div class="section-header">
+            <div class="label">Our Work</div>
+            <h2>Style Gallery</h2>
+            <div class="divider"></div>
+            <p>A selection of our favourite looks — follow us on Instagram for more</p>
+        </div>
+        <div class="gallery-grid">
+            <div class="gallery-item">&#128135;&#8205;&#9792;&#65039;</div>
+            <div class="gallery-item">&#128131;</div>
+            <div class="gallery-item">&#10024;</div>
+            <div class="gallery-item">&#128133;</div>
+            <div class="gallery-item">&#127912;</div>
+            <div class="gallery-item">&#128142;</div>
+            <div class="gallery-item">&#9988;</div>
+            <div class="gallery-item">&#128133;</div>
+        </div>
+    </section>
+
+    <!-- Team -->
+    <section class="team" id="team">
+        <div class="section-header">
+            <div class="label">Meet The Team</div>
+            <h2>Our Stylists</h2>
+            <div class="divider"></div>
+        </div>
+        <div class="team-grid">
+            <div class="team-card">
+                <div class="team-photo">&#128131;</div>
+                <h3>Sophie Laurent</h3>
+                <div class="role">Creative Director</div>
+                <p>15 years experience. Trained at Vidal Sassoon. Specialises in precision cutting and balayage colour work.</p>
+            </div>
+            <div class="team-card">
+                <div class="team-photo">&#9988;</div>
+                <h3>Maya Chen</h3>
+                <div class="role">Senior Colourist</div>
+                <p>Award-winning colourist with a passion for bold transformations. L'Oreal Colour Trophy finalist 2025.</p>
+            </div>
+            <div class="team-card">
+                <div class="team-photo">&#128142;</div>
+                <h3>Priya Sharma</h3>
+                <div class="role">Beauty Therapist</div>
+                <p>CIDESCO-qualified beauty therapist specialising in advanced facials, lash treatments, and bridal beauty.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reviews -->
+    <section class="reviews" id="reviews">
+        <div class="section-header">
+            <div class="label">Kind Words</div>
+            <h2>Client Reviews</h2>
+            <div class="divider"></div>
+        </div>
+        <div class="reviews-grid">
+            <div class="review">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"Sophie completely transformed my hair. I went in wanting a change and walked out feeling like a new person. The balayage is absolutely stunning!"</p>
+                <div class="name">Charlotte W.</div>
+            </div>
+            <div class="review">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"Best salon I've ever been to. The attention to detail is incredible, the atmosphere is so relaxing, and my colour has never looked better."</p>
+                <div class="name">Aisha K.</div>
+            </div>
+            <div class="review">
+                <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"Had my bridal hair and makeup done here. Priya and Sophie were amazing — I felt absolutely beautiful on my wedding day. Cannot recommend enough!"</p>
+                <div class="name">Emily R.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Booking CTA -->
+    <section class="booking-cta" id="book">
+        <h2>Ready for Your Glow Up?</h2>
+        <p>Book your appointment online or give us a call. New clients receive 20% off their first visit.</p>
+        <a href="#contact" class="btn btn-gold">Book Your Appointment</a>
+    </section>
+
+    <!-- Contact -->
+    <section class="contact" id="contact">
+        <div class="section-header">
+            <div class="label">Get in Touch</div>
+            <h2>Book or Enquire</h2>
+            <div class="divider"></div>
+        </div>
+        <div class="contact-grid">
+            <form onsubmit="event.preventDefault(); alert('Thank you! We\'ll confirm your appointment within 2 hours.');">
+                <input type="text" placeholder="Your Name" required>
+                <input type="tel" placeholder="Phone Number" required>
+                <input type="email" placeholder="Email Address" required>
+                <select required>
+                    <option value="">Select Service</option>
+                    <option>Cut & Blow Dry</option>
+                    <option>Colour / Highlights</option>
+                    <option>Balayage</option>
+                    <option>Hair Treatment</option>
+                    <option>Nails</option>
+                    <option>Facial</option>
+                    <option>Bridal</option>
+                    <option>Other</option>
+                </select>
+                <input type="date" required>
+                <textarea placeholder="Any preferences or notes..."></textarea>
+                <button type="submit" class="btn btn-gold">Request Appointment</button>
+            </form>
+            <div class="salon-info">
+                <h3>Visit Glow Studio</h3>
+                <div class="info-item">
+                    <strong>&#128205; Location</strong>
+                    <p>18 King's Road<br>Chelsea, London SW3 4RP</p>
+                </div>
+                <div class="info-item">
+                    <strong>&#128222; Phone</strong>
+                    <p><a href="tel:02071239876">020 7123 9876</a></p>
+                </div>
+                <div class="info-item">
+                    <strong>&#128231; Email</strong>
+                    <p><a href="mailto:hello@glowstudio.co.uk">hello@glowstudio.co.uk</a></p>
+                </div>
+                <div class="info-item">
+                    <strong>&#128336; Opening Hours</strong>
+                    <p>Mon–Fri: 9:00 – 20:00<br>Saturday: 9:00 – 18:00<br>Sunday: 10:00 – 17:00</p>
+                </div>
+                <div class="info-item">
+                    <strong>&#128247; Follow Us</strong>
+                    <p><a href="#">Instagram</a> &bull; <a href="#">Facebook</a> &bull; <a href="#">TikTok</a></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2026 Glow Studio London. All rights reserved. | <a href="#">Privacy Policy</a> | <a href="#">Terms</a></p>
+    </footer>
+</body>
+</html>
