@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Great Escapes — Preview of Proposed Changes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --sage: #676D41;
+            --sage-dark: #545633;
+            --cream: #FFFBF3;
+            --dark: #001304;
+            --text: #333;
+            --white: #ffffff;
+            --shadow: 0 2px 12px rgba(0, 19, 4, 0.06);
+            --radius: 12px;
+        }
+        body { font-family: 'Lato', sans-serif; color: var(--text); background: var(--cream); font-size: 16px; line-height: 1.7; }
+        h1, h2, h3, h4 { font-family: 'Young Serif', serif; color: var(--dark); font-weight: 700; }
+
+        /* Preview Banner */
+        .preview-banner {
+            background: var(--sage); color: var(--cream); text-align: center; padding: 1rem 2rem;
+            font-size: 0.85rem; letter-spacing: 1px; position: sticky; top: 0; z-index: 200;
+        }
+        .preview-banner strong { color: #fff; }
+
+        /* Header / Nav */
+        header {
+            background: var(--white); padding: 1rem 2rem;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 8px rgba(0,0,0,0.05); position: sticky; top: 42px; z-index: 100;
+        }
+        .logo {
+            font-family: 'Young Serif', serif; font-size: 1.5rem; color: var(--dark);
+            padding-left: 20px; padding-top: 5px;
+        }
+        .logo span { color: var(--sage); }
+        nav ul { list-style: none; display: flex; gap: 1.5rem; }
+        nav ul li a { text-decoration: none; color: var(--dark); font-size: 0.9rem; font-weight: 700; transition: color 0.3s; }
+        nav ul li a:hover { color: var(--sage); }
+        .nav-mobile { display: none; }
+
+        @media (max-width: 768px) {
+            nav ul { display: none; }
+            .nav-mobile { display: block; font-size: 1.5rem; cursor: pointer; background: none; border: none; color: var(--dark); }
+            .logo { font-size: 1.2rem; padding-left: 15px; }
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, rgba(103,109,65,0.15), rgba(255,251,243,0.9)),
+                        linear-gradient(45deg, #c2c5a0, #e8e5d0);
+            padding: 5rem 2rem; text-align: center;
+        }
+        .hero h1 { font-size: 2.8rem; margin-bottom: 1rem; line-height: 1.15; letter-spacing: -0.02em; }
+        .hero p { font-size: 1.15rem; color: #555; max-width: 600px; margin: 0 auto 2rem; }
+        .search-bar {
+            max-width: 500px; margin: 0 auto; display: flex; gap: 0;
+            background: var(--white); border-radius: 50px; overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .search-bar input {
+            flex: 1; padding: 1rem 1.5rem; border: none; font-size: 1rem;
+            font-family: 'Lato', sans-serif; outline: none; background: transparent;
+        }
+        .search-bar button {
+            background: var(--sage); color: #fff; border: none; padding: 1rem 2rem;
+            font-family: 'Lato', sans-serif; font-weight: 700; cursor: pointer;
+            transition: background 0.3s;
+        }
+        .search-bar button:hover { background: var(--sage-dark); }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2rem; }
+            .hero p { font-size: 1rem; }
+            .search-bar { flex-direction: column; border-radius: 12px; }
+            .search-bar button { border-radius: 0 0 12px 12px; }
+        }
+
+        /* Sections */
+        section { padding: 4rem 5%; }
+        .section-alt { background: var(--white); }
+        .section-header { text-align: center; margin-bottom: 2.5rem; }
+        .section-header h2 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--sage); }
+        .section-header p { color: #888; }
+
+        /* About / Mission */
+        .mission-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+        .mission-visual {
+            height: 300px; border-radius: var(--radius); display: flex; align-items: center;
+            justify-content: center; font-size: 4rem;
+            background: linear-gradient(135deg, var(--sage), #8a9160);
+        }
+        .mission-text h2 { font-size: 1.8rem; margin-bottom: 1rem; }
+        .mission-text p { color: #555; margin-bottom: 1rem; }
+
+        @media (max-width: 768px) {
+            .mission-grid { grid-template-columns: 1fr; }
+            .mission-visual { height: 200px; }
+        }
+
+        /* Latest Escapes Cards */
+        .escapes-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .escape-card {
+            background: var(--white); border-radius: var(--radius); overflow: hidden;
+            box-shadow: var(--shadow); transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .escape-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,19,4,0.08); }
+        .escape-img {
+            height: 220px; display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; color: #fff;
+        }
+        .escape-card:nth-child(1) .escape-img { background: linear-gradient(135deg, #7a9e7e, #4a7c59); }
+        .escape-card:nth-child(2) .escape-img { background: linear-gradient(135deg, #c49464, #a67b4b); }
+        .escape-card:nth-child(3) .escape-img { background: linear-gradient(135deg, #6b8fa3, #4a7080); }
+        .escape-card .content { padding: 1.5rem; }
+        .escape-card .tag { font-size: 0.75rem; color: var(--sage); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+        .escape-card h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+        .escape-card h3 a { color: var(--sage); text-decoration: none; transition: color 0.3s; }
+        .escape-card h3 a:hover { color: var(--sage-dark); }
+        .escape-card p { font-size: 0.9rem; color: #777; }
+        .escape-card .meta { font-size: 0.8rem; color: var(--sage); margin-top: 0.8rem; font-weight: 700; }
+
+        @media (max-width: 768px) {
+            .escapes-grid { grid-template-columns: 1fr; }
+            .escape-img { height: 180px; }
+        }
+
+        /* Blog / Inspiration */
+        .blog-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; }
+        .blog-featured {
+            background: var(--white); border-radius: var(--radius); overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .blog-featured-img {
+            height: 300px; display: flex; align-items: center; justify-content: center;
+            font-size: 4rem; color: #fff;
+            background: linear-gradient(135deg, #5a8a6a, #3d6b4f);
+        }
+        .blog-featured .content { padding: 2rem; }
+        .blog-featured h3 {
+            font-size: 1.5rem; margin-bottom: 0.8rem;
+            word-wrap: break-word; overflow-wrap: break-word; hyphens: auto;
+        }
+        .blog-featured h3 a { color: var(--sage); text-decoration: none; }
+        .blog-featured p { color: #666; }
+        .blog-featured .meta { color: var(--sage); font-size: 0.85rem; font-weight: 700; margin-top: 1rem; }
+
+        .blog-sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+        .blog-small {
+            background: var(--white); border-radius: var(--radius); overflow: hidden;
+            box-shadow: var(--shadow); display: flex; gap: 1rem; transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .blog-small:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,19,4,0.08); }
+        .blog-small-img {
+            width: 120px; min-height: 100px; display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; color: #fff; flex-shrink: 0;
+        }
+        .blog-small:nth-child(1) .blog-small-img { background: linear-gradient(135deg, #c49464, #a67b4b); }
+        .blog-small:nth-child(2) .blog-small-img { background: linear-gradient(135deg, #6b8fa3, #4a7080); }
+        .blog-small:nth-child(3) .blog-small-img { background: linear-gradient(135deg, #7a9e7e, #4a7c59); }
+        .blog-small .content { padding: 1rem; }
+        .blog-small h4 {
+            font-size: 0.95rem; margin-bottom: 0.3rem;
+            word-wrap: break-word; overflow-wrap: break-word;
+        }
+        .blog-small h4 a { color: var(--sage); text-decoration: none; }
+        .blog-small .meta { font-size: 0.75rem; color: #999; }
+
+        @media (max-width: 768px) {
+            .blog-grid { grid-template-columns: 1fr; }
+            .blog-featured-img { height: 200px; }
+        }
+
+        /* Detail Page Preview */
+        .detail-preview { background: var(--cream); }
+        .detail-cards { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+        .detail-card {
+            background: var(--white); border-radius: var(--radius); padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+        .detail-card:nth-child(even) { background: #f7f5f0; }
+        .detail-card h3 { color: var(--sage); margin-bottom: 1rem; font-size: 1.3rem; }
+        .detail-card p { color: #555; }
+        .detail-card .detail-meta { display: flex; gap: 2rem; margin-top: 1rem; flex-wrap: wrap; }
+        .detail-card .detail-meta span { font-size: 0.9rem; color: var(--sage); font-weight: 700; }
+
+        /* Newsletter */
+        .newsletter {
+            background: var(--cream); text-align: center; padding: 4rem 2rem;
+            border-top: 1px solid rgba(103,109,65,0.15); border-bottom: 1px solid rgba(103,109,65,0.15);
+        }
+        .newsletter h2 { margin-bottom: 0.5rem; }
+        .newsletter p { color: #888; margin-bottom: 1.5rem; }
+        .newsletter-form {
+            max-width: 450px; margin: 0 auto; display: flex; gap: 8px;
+        }
+        .newsletter-form input {
+            flex: 1; padding: 12px 16px; border: 2px solid var(--sage); border-radius: 8px;
+            font-family: 'Lato', sans-serif; font-size: 1rem; outline: none;
+        }
+        .newsletter-form input:focus { box-shadow: 0 0 0 3px rgba(103,109,65,0.15); }
+        .newsletter-form button {
+            background: var(--sage); color: var(--cream); border: none; border-radius: 8px;
+            padding: 12px 24px; font-family: 'Lato', sans-serif; font-weight: 700;
+            cursor: pointer; transition: background 0.3s; white-space: nowrap;
+        }
+        .newsletter-form button:hover { background: var(--sage-dark); }
+
+        @media (max-width: 768px) {
+            .newsletter-form { flex-direction: column; }
+        }
+
+        /* Cookie Banner */
+        .cookie-banner {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 300;
+            background: var(--dark); color: var(--cream); padding: 1.5rem 2rem;
+            display: flex; justify-content: space-between; align-items: center; gap: 1.5rem;
+            border-top: 3px solid var(--sage);
+            font-size: 0.9rem;
+        }
+        .cookie-banner p { flex: 1; opacity: 0.85; line-height: 1.5; }
+        .cookie-btns { display: flex; gap: 0.8rem; flex-shrink: 0; }
+        .cookie-accept {
+            background: var(--sage); color: var(--cream); border: none; border-radius: 6px;
+            padding: 10px 20px; font-weight: 700; cursor: pointer; font-family: 'Lato', sans-serif;
+            transition: background 0.3s;
+        }
+        .cookie-accept:hover { background: var(--sage-dark); }
+        .cookie-settings {
+            background: transparent; color: var(--cream); border: 2px solid var(--sage);
+            border-radius: 6px; padding: 10px 20px; cursor: pointer; font-family: 'Lato', sans-serif;
+            transition: all 0.3s;
+        }
+        .cookie-settings:hover { background: var(--sage); }
+
+        @media (max-width: 768px) {
+            .cookie-banner { flex-direction: column; text-align: center; }
+        }
+
+        /* Footer */
+        footer { background: var(--dark); color: rgba(255,251,243,0.6); padding: 3rem 5%; }
+        .footer-grid { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 2rem; }
+        .footer-col h4 { font-family: 'Young Serif', serif; color: var(--cream); margin-bottom: 1rem; font-size: 1.1rem; }
+        .footer-col p { font-size: 0.85rem; line-height: 1.6; }
+        .footer-col ul { list-style: none; }
+        .footer-col ul li { margin-bottom: 0.5rem; }
+        .footer-col ul li a { color: rgba(255,251,243,0.6); text-decoration: none; font-size: 0.85rem; transition: color 0.3s; }
+        .footer-col ul li a:hover { color: var(--sage); }
+        .footer-newsletter { display: flex; gap: 6px; margin-top: 0.5rem; }
+        .footer-newsletter input {
+            flex: 1; padding: 8px 12px; border: 2px solid var(--sage); border-radius: 6px;
+            background: transparent; color: var(--cream); font-size: 0.85rem; outline: none;
+        }
+        .footer-newsletter button {
+            background: var(--sage); color: var(--cream); border: none; border-radius: 6px;
+            padding: 8px 14px; font-weight: 700; cursor: pointer; font-size: 0.8rem;
+        }
+        .footer-bottom { max-width: 1000px; margin: 2rem auto 0; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; font-size: 0.8rem; }
+
+        @media (max-width: 768px) {
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
+            .footer-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Change annotations */
+        .change-note {
+            display: inline-block; background: #676D41; color: #fff; font-size: 0.65rem;
+            padding: 2px 8px; border-radius: 10px; font-weight: 700; letter-spacing: 0.5px;
+            vertical-align: middle; margin-left: 8px; font-family: 'Lato', sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Preview Banner -->
+    <div class="preview-banner">
+        <strong>PREVIEW</strong> — Proposed design improvements for findgreatescapes.com
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="logo">Find Great <span>Escapes</span> <span class="change-note">LOGO REPOSITIONED</span></div>
+        <button class="nav-mobile">&#9776;</button>
+        <nav>
+            <ul>
+                <li><a href="#">All Escapes</a></li>
+                <li><a href="#">Destinations</a></li>
+                <li><a href="#">Collections</a></li>
+                <li><a href="#">Inspiration</a></li>
+                <li><a href="#">About Us</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>Sustainable sleeps and greener getaways</h1>
+        <p>Discover handpicked eco-friendly stays, community-led tours, and low-carbon hideaways around the world.</p>
+        <div class="search-bar">
+            <input type="text" placeholder="Search destinations, collections...">
+            <button>Search</button>
+        </div>
+    </section>
+
+    <!-- Mission -->
+    <section class="section-alt">
+        <div class="mission-grid">
+            <div class="mission-visual">&#127757;</div>
+            <div class="mission-text">
+                <h2>Who We Are</h2>
+                <p>Find Great Escapes is an independent travel publication and digital social enterprise. We curate low-carbon hideaways and community-led tours that leave destinations better than you found them.</p>
+                <p>Every stay is handpicked by our editorial team. We prioritise places that genuinely invest in their communities and environment — not just greenwashing.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Latest Escapes -->
+    <section>
+        <div class="section-header">
+            <h2>Latest Escapes <span class="change-note">COLOUR UPDATED TO BRAND GREEN</span></h2>
+            <p>Our newest handpicked sustainable stays</p>
+        </div>
+        <div class="escapes-grid">
+            <div class="escape-card">
+                <div class="escape-img">&#127964;</div>
+                <div class="content">
+                    <div class="tag">Kenya &bull; Wildlife</div>
+                    <h3><a href="#">Ol Pejeta Bush Camp</a></h3>
+                    <p>An intimate safari camp in the heart of Ol Pejeta Conservancy, home to the last two northern white rhinos.</p>
+                    <div class="meta">From £180/night</div>
+                </div>
+            </div>
+            <div class="escape-card">
+                <div class="escape-img">&#127956;</div>
+                <div class="content">
+                    <div class="tag">Indonesia &bull; Beach</div>
+                    <h3><a href="#">Bambu Indah, Bali</a></h3>
+                    <p>Antique Javanese bridal homes transformed into luxurious eco-cabins surrounded by organic gardens.</p>
+                    <div class="meta">From £120/night</div>
+                </div>
+            </div>
+            <div class="escape-card">
+                <div class="escape-img">&#9968;</div>
+                <div class="content">
+                    <div class="tag">Scotland &bull; Adventure</div>
+                    <h3><a href="#">Glen Coe Eco Lodge</a></h3>
+                    <p>Off-grid mountain lodge powered by renewables, with wild swimming and guided Highland walks.</p>
+                    <div class="meta">From £95/night</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog / Inspiration -->
+    <section class="section-alt">
+        <div class="section-header">
+            <h2>Inspiration</h2>
+            <p>Stories, guides, and honest conversations about sustainable travel</p>
+        </div>
+        <div class="blog-grid">
+            <div class="blog-featured">
+                <div class="blog-featured-img">&#127758;</div>
+                <div class="content">
+                    <h3><a href="#">The best family safari lodges that actually give back to local communities</a> <span class="change-note">TEXT WRAPPING FIXED</span></h3>
+                    <p>We visited 12 family-friendly safari lodges across East Africa to find the ones that genuinely invest in conservation and community development — not just marketing buzzwords.</p>
+                    <div class="meta">March 2026 &bull; 8 min read</div>
+                </div>
+            </div>
+            <div class="blog-sidebar">
+                <div class="blog-small">
+                    <div class="blog-small-img">&#128218;</div>
+                    <div class="content">
+                        <h4><a href="#">Bluewashing: how ecotourism can be used against indigenous communities</a></h4>
+                        <div class="meta">February 2026</div>
+                    </div>
+                </div>
+                <div class="blog-small">
+                    <div class="blog-small-img">&#9992;</div>
+                    <div class="content">
+                        <h4><a href="#">Low-carbon routes: Europe by train, ferry and bus</a></h4>
+                        <div class="meta">January 2026</div>
+                    </div>
+                </div>
+                <div class="blog-small">
+                    <div class="blog-small-img">&#127793;</div>
+                    <div class="content">
+                        <h4><a href="#">What does "sustainable" actually mean in travel?</a></h4>
+                        <div class="meta">December 2025</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Detail Page Preview -->
+    <section class="detail-preview">
+        <div class="section-header">
+            <h2>Place Detail Page <span class="change-note">SECTIONS SPLIT INTO CARDS</span></h2>
+            <p>How individual escape pages will look with the new card layout</p>
+        </div>
+        <div class="detail-cards">
+            <div class="detail-card">
+                <h3>Overview</h3>
+                <p>Bambu Indah is a radically different hotel experience in Ubud, Bali. Eleven antique Javanese bridal homes have been lovingly restored and transformed into unique, luxurious eco-cabins set amongst organic gardens, natural springs, and rice paddies.</p>
+                <div class="detail-meta">
+                    <span>&#127793; Eco-Certified</span>
+                    <span>&#128101; Community-Run</span>
+                    <span>&#9889; Solar Powered</span>
+                </div>
+            </div>
+            <div class="detail-card">
+                <h3>What Makes It Special</h3>
+                <p>The property runs its own permaculture farm, uses solar energy, and employs 95% local staff. Guests can join cooking classes using ingredients grown on-site, visit the community school funded by the hotel, or simply relax by the stunning natural pool.</p>
+            </div>
+            <div class="detail-card">
+                <h3>Prices & Booking</h3>
+                <p>Rooms from £120/night including breakfast. Book direct through the property for the best rate and to ensure your money goes directly to the local team.</p>
+                <div class="detail-meta">
+                    <span>&#128176; From £120/night</span>
+                    <span>&#128197; Min 2 nights</span>
+                    <span>&#9989; Book Direct</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Newsletter -->
+    <section class="newsletter">
+        <h2>Join the Journey <span class="change-note">BRAND FONTS & COLOURS</span></h2>
+        <p>Get weekly sustainable travel inspiration, new escapes, and exclusive guides straight to your inbox.</p>
+        <div class="newsletter-form">
+            <input type="email" placeholder="Your email address">
+            <button>Subscribe</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>Find Great Escapes</h4>
+                <p>An independent travel publication curating sustainable stays and greener getaways worldwide.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Explore</h4>
+                <ul>
+                    <li><a href="#">All Escapes</a></li>
+                    <li><a href="#">Destinations</a></li>
+                    <li><a href="#">Collections</a></li>
+                    <li><a href="#">Inspiration</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="#">About Us</a></li>
+                    <li><a href="#">Contact</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Cookie Policy</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Newsletter <span class="change-note">IN FOOTER</span></h4>
+                <p>Weekly sustainable travel tips</p>
+                <div class="footer-newsletter">
+                    <input type="email" placeholder="Email">
+                    <button>Go</button>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2026 Find Great Escapes. All rights reserved. A digital social enterprise.
+        </div>
+    </footer>
+
+    <!-- Cookie Banner -->
+    <div class="cookie-banner">
+        <p>We use cookies to improve your experience. By continuing to browse, you agree to our use of cookies. <span class="change-note">BRAND COLOURS</span></p>
+        <div class="cookie-btns">
+            <button class="cookie-accept" onclick="this.closest('.cookie-banner').style.display='none'">Accept All</button>
+            <button class="cookie-settings" onclick="this.closest('.cookie-banner').style.display='none'">Settings</button>
+        </div>
+    </div>
+
+</body>
+</html>
