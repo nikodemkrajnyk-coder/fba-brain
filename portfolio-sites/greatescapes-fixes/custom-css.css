@@ -1,0 +1,394 @@
+/* ============================================
+   FIND GREAT ESCAPES - Custom CSS Fixes
+   Paste into: Appearance > Customize > Additional CSS
+   ============================================ */
+
+/* ---- GENERAL: Margin & Spacing Fixes ---- */
+
+/* Consistent section spacing */
+.elementor-section {
+    padding-left: 5% !important;
+    padding-right: 5% !important;
+}
+
+/* Mobile image sizing - prevent overflow and maintain aspect ratio */
+@media (max-width: 767px) {
+    .elementor-widget-image img,
+    .elementor-post__thumbnail img,
+    img.wp-post-image {
+        width: 100% !important;
+        height: auto !important;
+        object-fit: cover;
+    }
+
+    /* Tighter mobile margins */
+    .elementor-section {
+        padding-left: 4% !important;
+        padding-right: 4% !important;
+    }
+
+    /* Mobile font size adjustments */
+    h1, .elementor-heading-title.elementor-size-large {
+        font-size: 2rem !important;
+        line-height: 1.2 !important;
+    }
+
+    h2, .elementor-heading-title.elementor-size-medium {
+        font-size: 1.5rem !important;
+        line-height: 1.25 !important;
+    }
+
+    h3 {
+        font-size: 1.2rem !important;
+    }
+
+    /* Fix mobile content padding */
+    .elementor-widget-wrap {
+        padding: 0 10px !important;
+    }
+}
+
+/* ---- TYPOGRAPHY: Font Refinements ---- */
+
+/* Heading hierarchy - Young Serif */
+h1, h1.elementor-heading-title {
+    font-family: 'Young Serif', serif !important;
+    font-size: 2.8rem !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    color: #001304 !important;
+    letter-spacing: -0.02em;
+}
+
+h2, h2.elementor-heading-title {
+    font-family: 'Young Serif', serif !important;
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    color: #001304 !important;
+}
+
+h3, h3.elementor-heading-title {
+    font-family: 'Young Serif', serif !important;
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+}
+
+/* Body text - Lato refinement */
+body, p, .elementor-widget-text-editor {
+    font-family: 'Lato', sans-serif !important;
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+    color: #333 !important;
+}
+
+/* ---- HOME PAGE: Logo Positioning ---- */
+
+/* Move logo inward and down from edges */
+.elementor-widget-site-logo,
+.site-branding,
+.custom-logo-link {
+    padding-left: 20px !important;
+    padding-top: 10px !important;
+}
+
+.site-header .elementor-widget-site-logo img,
+.custom-logo {
+    max-height: 60px !important;
+    width: auto !important;
+}
+
+@media (max-width: 767px) {
+    .elementor-widget-site-logo,
+    .site-branding,
+    .custom-logo-link {
+        padding-left: 15px !important;
+        padding-top: 8px !important;
+    }
+}
+
+/* ---- HOME PAGE: Latest Escapes Font Colour ---- */
+
+/* Change 'Latest Escapes' / 'Our latest stays' heading to brand sage green */
+.elementor-widget-heading .elementor-heading-title:contains("latest"),
+.post_list_content_unit h2,
+.post_list_content_unit h3,
+.post_list_content_unit .elementor-heading-title,
+.post-list-content h2,
+.post-list-content h3 {
+    color: #676D41 !important;
+}
+
+/* Post card titles in sage green */
+.post_list_content_unit a,
+.post-list-content a {
+    color: #676D41 !important;
+    transition: color 0.3s ease;
+}
+
+.post_list_content_unit a:hover,
+.post-list-content a:hover {
+    color: #545633 !important;
+}
+
+/* ---- BLOG PAGE: Featured Blog Title Text Wrap ---- */
+
+/* Ensure featured blog title wraps properly */
+.elementor-post__title,
+.elementor-post__title a {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    white-space: normal !important;
+    display: block !important;
+    max-width: 100% !important;
+}
+
+/* ---- BLOG PAGE: Image Sizing Consistency ---- */
+
+/* Consistent blog card image sizing */
+.elementor-post__thumbnail {
+    width: 100% !important;
+    height: 220px !important;
+    overflow: hidden !important;
+    border-radius: 12px !important;
+}
+
+.elementor-post__thumbnail img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: center !important;
+}
+
+@media (max-width: 767px) {
+    .elementor-post__thumbnail {
+        height: 180px !important;
+    }
+}
+
+/* Blog card styling for cleaner look */
+.elementor-post {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.elementor-post:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 25px rgba(0, 19, 4, 0.08) !important;
+}
+
+/* ---- DETAILS/PLACE PAGE: Section Splitting ---- */
+
+/* Alternate section backgrounds for place detail pages */
+.single-gd_place .elementor-section:nth-child(odd) {
+    background-color: #FFFBF3 !important;
+}
+
+.single-gd_place .elementor-section:nth-child(even) {
+    background-color: #ffffff !important;
+}
+
+/* Card/box style for detail sections */
+.single-gd_place .elementor-widget-wrap {
+    background: #fff;
+    border-radius: 12px;
+    padding: 2rem !important;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0, 19, 4, 0.04);
+}
+
+/* GeoDirectory field styling */
+.geodir-field-overview,
+.geodir-field-post_content {
+    background: #fff !important;
+    padding: 2rem !important;
+    border-radius: 12px !important;
+    margin-bottom: 1.5rem !important;
+    box-shadow: 0 2px 12px rgba(0, 19, 4, 0.04) !important;
+}
+
+/* ---- NEWSLETTER / KIT FORM: Brand Matching ---- */
+
+/* ConvertKit / Kit form brand colours */
+.formkit-form {
+    background-color: #FFFBF3 !important;
+    border-radius: 12px !important;
+    font-family: 'Lato', sans-serif !important;
+}
+
+.formkit-form h2,
+.formkit-form h3,
+.formkit-form [data-element="header"] {
+    font-family: 'Young Serif', serif !important;
+    color: #001304 !important;
+}
+
+.formkit-form p,
+.formkit-form label,
+.formkit-form [data-element="subheader"] {
+    font-family: 'Lato', sans-serif !important;
+    color: #333 !important;
+}
+
+.formkit-input {
+    border: 2px solid #676D41 !important;
+    border-radius: 8px !important;
+    font-family: 'Lato', sans-serif !important;
+    padding: 12px 16px !important;
+}
+
+.formkit-input:focus {
+    border-color: #545633 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(103, 109, 65, 0.15) !important;
+}
+
+.formkit-submit,
+.formkit-submit span {
+    background-color: #676D41 !important;
+    color: #FFFBF3 !important;
+    border-radius: 8px !important;
+    font-family: 'Lato', sans-serif !important;
+    font-weight: 700 !important;
+    border: none !important;
+    padding: 12px 24px !important;
+    transition: background-color 0.3s ease !important;
+}
+
+.formkit-submit:hover {
+    background-color: #545633 !important;
+}
+
+/* Compact footer newsletter */
+footer .formkit-form,
+.elementor-location-footer .formkit-form {
+    max-width: 400px !important;
+    padding: 1.5rem !important;
+}
+
+footer .formkit-form .formkit-fields {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+footer .formkit-form .formkit-input {
+    flex: 1 !important;
+    padding: 10px 14px !important;
+}
+
+footer .formkit-form .formkit-submit {
+    white-space: nowrap !important;
+    padding: 10px 20px !important;
+}
+
+/* ---- COOKIE BANNER: Brand Colours ---- */
+
+/* Common cookie plugins - covers most WordPress cookie solutions */
+
+/* CookieYes */
+.cky-consent-container,
+.cky-consent-bar {
+    background-color: #001304 !important;
+    font-family: 'Lato', sans-serif !important;
+    border-top: 3px solid #676D41 !important;
+}
+
+.cky-consent-bar .cky-title {
+    font-family: 'Young Serif', serif !important;
+    color: #FFFBF3 !important;
+}
+
+.cky-consent-bar .cky-notice-des {
+    color: #FFFBF3 !important;
+    opacity: 0.85;
+}
+
+.cky-btn-accept,
+.cky-btn-customize {
+    background-color: #676D41 !important;
+    color: #FFFBF3 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-family: 'Lato', sans-serif !important;
+    font-weight: 700 !important;
+}
+
+.cky-btn-accept:hover {
+    background-color: #545633 !important;
+}
+
+.cky-btn-reject {
+    background-color: transparent !important;
+    color: #FFFBF3 !important;
+    border: 2px solid #676D41 !important;
+    border-radius: 6px !important;
+}
+
+/* Complianz */
+.cmplz-cookiebanner {
+    background-color: #001304 !important;
+    font-family: 'Lato', sans-serif !important;
+    border-top: 3px solid #676D41 !important;
+}
+
+.cmplz-cookiebanner .cmplz-title {
+    font-family: 'Young Serif', serif !important;
+    color: #FFFBF3 !important;
+}
+
+.cmplz-cookiebanner .cmplz-message {
+    color: #FFFBF3 !important;
+}
+
+.cmplz-btn.cmplz-accept,
+.cmplz-btn.cmplz-deny {
+    background-color: #676D41 !important;
+    color: #FFFBF3 !important;
+    border: none !important;
+    border-radius: 6px !important;
+}
+
+.cmplz-btn:hover {
+    background-color: #545633 !important;
+}
+
+/* GDPR Cookie Compliance */
+.moove-gdpr-modal-content,
+#moove_gdpr_cookie_info_bar {
+    background-color: #001304 !important;
+    font-family: 'Lato', sans-serif !important;
+}
+
+#moove_gdpr_cookie_info_bar .moove-gdpr-info-bar-content p {
+    color: #FFFBF3 !important;
+}
+
+#moove_gdpr_cookie_info_bar .moove-gdpr-infobar-allow-all {
+    background-color: #676D41 !important;
+    color: #FFFBF3 !important;
+    border-radius: 6px !important;
+}
+
+/* Generic cookie banner fallback */
+[class*="cookie-banner"],
+[class*="cookie-consent"],
+[id*="cookie-banner"],
+[id*="cookie-consent"] {
+    background-color: #001304 !important;
+    font-family: 'Lato', sans-serif !important;
+    color: #FFFBF3 !important;
+}
+
+[class*="cookie-banner"] button,
+[class*="cookie-consent"] button,
+[id*="cookie-banner"] button,
+[id*="cookie-consent"] button {
+    background-color: #676D41 !important;
+    color: #FFFBF3 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: 700 !important;
+}
