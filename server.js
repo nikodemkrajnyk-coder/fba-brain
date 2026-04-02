@@ -16,6 +16,8 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 function load() { try { if (fs.existsSync(DATA)) return JSON.parse(fs.readFileSync(DATA,'utf8')); } catch(e){} return {deals:[],inventory:[],alerts:[],processed:[],budget:200,log:[]}; }
 function save(s) { try { fs.writeFileSync(DATA, JSON.stringify(s,null,2)); } catch(e){} }
 let S = load();
+// Autopilot settings (saved in state)
+S.autopilot = S.autopilot || { enabled: false, minScore: 75, minProfit: 5, minChecks: 7, maxSpendPerDeal: 200, dailyBudgetLimit: 200 };
 function log(m) { const e=`[${new Date().toLocaleTimeString('en-GB')}] ${m}`; console.log(e); S.log=[e,...(S.log||[])].slice(0,200); }
 
 // ═══════════════════════════════════════
@@ -982,10 +984,152 @@ async function autoScan() {
 }
 
 // ═══════════════════════════════════════
+// AUTOPILOT ENGINE
+// When enabled: auto-approves → auto-orders via CJ → auto-lists on Amazon
+// User does NOTHING — just watches profit come in
+// ═══════════════════════════════════════
+async function runAutopilot() {
+  if (!S.autopilot?.enabled) return;
+  const ap = S.autopilot;
+  const budget = S.budget || 200;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  S._autopilotSpend = S._autopilotSpend || {};
+  const spentToday = S._autopilotSpend[todayKey] || 0;
+
+  log('🤖 Autopilot running...');
+  let actions = 0;
+
+  // STEP 1: Auto-approve & auto-order deals that pass threshold
+  const deals = (S.deals || []).filter(d => d.status === 'found' && !d.autoApproved);
+  for (const deal of deals) {
+    const analysed = analyse(deal, budget);
+    const passesThreshold = analysed.score >= ap.minScore &&
+                            analysed.pr >= ap.minProfit &&
+                            analysed.passedChecks >= ap.minChecks &&
+                            analysed.profitable;
+    if (!passesThreshold) continue;
+
+    // Check daily budget limit
+    const dealCost = (analysed.buyPrice || 0) * (analysed.u || 1);
+    if (dealCost > ap.maxSpendPerDeal) { log(`🤖 Skip auto-order: ${deal.name.slice(0,30)} — £${dealCost.toFixed(0)} exceeds max £${ap.maxSpendPerDeal}/deal`); continue; }
+    if (spentToday + dealCost > ap.dailyBudgetLimit) { log(`🤖 Daily limit reached (£${spentToday.toFixed(0)}/£${ap.dailyBudgetLimit})`); break; }
+
+    // Auto-approve
+    deal.autoApproved = true;
+    deal.autoApprovedAt = new Date().toISOString();
+    deal.status = 'approved';
+    log(`🤖 Auto-approved: ${deal.name.slice(0,40)} — score ${analysed.score}, £${analysed.pr} profit, ${analysed.passedChecks}/${analysed.totalChecks}`);
+
+    // Auto-order via CJ if available
+    if (process.env.CJ_API_KEY && S.prepAddress) {
+      try {
+        const keyword = deal.name.split(' ').slice(0, 5).join(' ');
+        const cjResults = await cjSearch(keyword, 3);
+        if (cjResults?.length) {
+          const cheapest = cjResults.reduce((a, b) => a.price < b.price ? a : b);
+          deal.buyPrice = cheapest.price;
+          deal.cjProduct = cheapest;
+          deal.from = 'CJDropshipping';
+
+          const orderResult = await cjOrder(cheapest.pid, analysed.u || 10, S.prepAddress);
+          if (!orderResult.error) {
+            // Move to inventory
+            S.inventory = S.inventory || [];
+            S.inventory.push({
+              id: Date.now(), name: deal.name, units: analysed.u || 10,
+              buyPrice: cheapest.price, sellPrice: deal.sellPrice, weightKg: deal.weightKg,
+              dateSent: new Date().toISOString(), status: 'ordered', asin: deal.asin,
+              category: deal.category, reviewCount: deal.reviewCount,
+              from: 'CJDropshipping (autopilot)', cjOrderId: orderResult.data?.orderId,
+              autoOrdered: true,
+            });
+            deal.status = 'ordered';
+            S._autopilotSpend[todayKey] = (S._autopilotSpend[todayKey] || 0) + (cheapest.price * (analysed.u || 10));
+            log(`🤖 Auto-ordered: ${deal.name.slice(0,30)} × ${analysed.u} units via CJ → prep centre`);
+            actions++;
+          } else {
+            log(`🤖 CJ order failed: ${orderResult.error}`);
+          }
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (e) { log(`🤖 Auto-order error: ${e.message}`); }
+    } else {
+      // No CJ — just mark as approved, user orders manually
+      S.inventory = S.inventory || [];
+      S.inventory.push({
+        id: Date.now(), name: deal.name, units: analysed.u || 10,
+        buyPrice: deal.buyPrice, sellPrice: deal.sellPrice, weightKg: deal.weightKg,
+        dateSent: new Date().toISOString(), status: 'ordered', asin: deal.asin,
+        category: deal.category, reviewCount: deal.reviewCount,
+        from: deal.from || 'Auto-approved', autoOrdered: false,
+      });
+      deal.status = 'ordered';
+      actions++;
+    }
+  }
+
+  // STEP 2: Auto-list on Amazon — items at prep that haven't been listed
+  if (process.env.SP_REFRESH_TOKEN) {
+    const atPrep = (S.inventory || []).filter(i => i.status === 'prep' && !i.amazonListed);
+    for (const item of atPrep) {
+      if (!item.asin) continue;
+      try {
+        const result = await spApiCreateOffer(item.asin, item.sellPrice * 0.97);
+        if (result) {
+          item.amazonListed = true;
+          item.amazonSku = result.sku || `FBA-${item.asin}-${Date.now()}`;
+          item.status = 'live';
+          log(`🤖 Auto-listed: ${item.name.slice(0,30)} @ £${(item.sellPrice * 0.97).toFixed(2)} on Amazon`);
+          actions++;
+        }
+      } catch (e) { log(`🤖 Auto-list error: ${e.message}`); }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+
+  // STEP 3: Auto-sync sales from Amazon
+  if (process.env.SP_REFRESH_TOKEN) {
+    try {
+      const orders = await spApiGetOrders(7);
+      if (orders?.payload?.Orders) {
+        for (const order of orders.payload.Orders) {
+          if (order.OrderStatus !== 'Shipped' && order.OrderStatus !== 'Delivered') continue;
+          const inv = (S.inventory || []).find(i => i.amazonSku);
+          if (inv) {
+            inv.sold = (inv.sold || 0) + 1;
+            inv.revenue = (inv.revenue || 0) + parseFloat(order.OrderTotal?.Amount || inv.sellPrice);
+          }
+        }
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  // Clean up old autopilot spend (keep 7 days)
+  const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  Object.keys(S._autopilotSpend || {}).forEach(k => { if (k < cutoff) delete S._autopilotSpend[k]; });
+
+  if (actions) save(S);
+  log(`🤖 Autopilot done — ${actions} actions taken`);
+}
+
+// Weekly profit email digest (if Gmail configured)
+async function sendDigest() {
+  if (!S.autopilot?.enabled) return;
+  const inv = S.inventory || [];
+  const totalProfit = inv.reduce((a, i) => a + (i.revenue || 0) - (i.units || 0) * (i.buyPrice || 0), 0);
+  const totalSold = inv.reduce((a, i) => a + (i.sold || 0), 0);
+  const liveCount = inv.filter(i => i.status === 'live').length;
+  const orderedCount = inv.filter(i => i.status === 'ordered').length;
+  log(`📊 Weekly: ${totalSold} sold, £${totalProfit.toFixed(2)} profit, ${liveCount} live, ${orderedCount} ordered`);
+}
+
+// ═══════════════════════════════════════
 // CRON
 // ═══════════════════════════════════════
 cron.schedule('*/2 * * * *', ()=>{ log('📧 Gmail check...'); checkGmail(); });
 cron.schedule('0 */2 * * *', ()=>autoScan()); // Scan every 2 hours
+cron.schedule('30 */2 * * *', ()=>runAutopilot()); // Autopilot every 2hr (30min after scan)
+cron.schedule('0 9 * * 1', ()=>sendDigest()); // Weekly digest Monday 9am
 cron.schedule('0 8 * * *', ()=>{
   log('📦 Inventory check...');
   (S.inventory||[]).forEach(i=>{
@@ -1015,10 +1159,21 @@ app.get('/api/state', (req,res)=>{
   res.json({deals,inventory:inv,alerts:(S.alerts||[]).slice(0,50),lastGmailCheck:S.lastGmailCheck,budget:b,
     log:(S.log||[]).slice(0,30),keepa:!!process.env.KEEPA_API_KEY,gmail:!!process.env.GMAIL_CLIENT_ID,
     cj:!!process.env.CJ_API_KEY,spApi:!!process.env.SP_REFRESH_TOKEN,prepAddress:!!S.prepAddress,
+    autopilot:S.autopilot,
     sources:SOURCES.map(s=>({name:s.name,region:s.region,ship:s.ship,days:s.days}))});
 });
 
 app.post('/api/budget', (req,res)=>{ S.budget=req.body.budget||200; save(S); res.json({ok:true}); });
+
+// Autopilot settings
+app.get('/api/autopilot', (req,res)=>{ res.json(S.autopilot); });
+app.post('/api/autopilot', (req,res)=>{
+  S.autopilot = { ...S.autopilot, ...req.body };
+  save(S);
+  log(`🤖 Autopilot ${S.autopilot.enabled ? 'ENABLED' : 'disabled'} — min score ${S.autopilot.minScore}, min profit £${S.autopilot.minProfit}, daily limit £${S.autopilot.dailyBudgetLimit}`);
+  res.json({ ok: true, autopilot: S.autopilot });
+});
+app.post('/api/autopilot/run', async(req,res)=>{ await runAutopilot(); res.json({ ok: true }); });
 
 // ═══════════════════════════════════════
 // SIMULATION — inject realistic test data to demo the full pipeline
