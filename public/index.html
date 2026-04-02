@@ -6,59 +6,61 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FBA Brain">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#f8f9fb">
+<meta name="theme-color" content="#D84315">
 <link rel="manifest" href="/manifest.json">
 <title>FBA Brain</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#f8f9fb;color:#1a1d26;font-family:'Plus Jakarta Sans',sans-serif}
-.hdr{background:#fff;border-bottom:1px solid #e8eaee;padding:16px 20px 0;position:sticky;top:0;z-index:10}
-.tabs{display:flex;gap:4px;margin-top:12px}.tab{flex:1;padding:12px 0;background:0;border:0;border-bottom:3px solid transparent;color:#9ca3af;font:600 13px 'Plus Jakarta Sans';cursor:pointer}.tab.on{color:#2563eb;border-color:#2563eb}
-.ct{padding:16px 18px;max-width:560px;margin:0 auto}
-.card{background:#fff;border-radius:16px;border:1px solid #e8eaee;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.card.approved{border-color:#22c55e}.card.skip{opacity:.35}
-.banner{padding:12px 18px;font:700 14px 'Plus Jakarta Sans';border-bottom:1px solid #f1f3f5}
-.banner.green{background:#f0fdf4;color:#16a34a}.banner.red{background:#fef2f2;color:#dc2626}.banner.yellow{background:#fffbeb;color:#d97706}
+body{background:#FBF8F6;color:#2D2016;font-family:'Plus Jakarta Sans',sans-serif}
+.hdr{background:linear-gradient(135deg,#D84315,#BF360C);padding:18px 20px 0;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(216,67,21,.25)}
+.tabs{display:flex;gap:4px;margin-top:14px}.tab{flex:1;padding:13px 0;background:0;border:0;border-bottom:3px solid transparent;color:rgba(255,255,255,.55);font:600 13px 'Plus Jakarta Sans';cursor:pointer;transition:all .2s ease;letter-spacing:.3px}.tab.on{color:#fff;border-color:#fff;opacity:1}.tab:hover{color:rgba(255,255,255,.85)}
+.ct{padding:18px 18px 32px;max-width:560px;margin:0 auto}
+.card{background:#fff;border-radius:14px;border:1px solid #E8E0D8;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(45,32,22,.06),0 4px 12px rgba(45,32,22,.03);transition:box-shadow .2s ease}
+.card.approved{border-color:#2E7D32;box-shadow:0 1px 4px rgba(46,125,50,.12),0 4px 12px rgba(46,125,50,.06)}.card.skip{opacity:.35}
+.banner{padding:13px 18px;font:700 14px 'Plus Jakarta Sans';border-bottom:1px solid rgba(0,0,0,.04)}
+.banner.green{background:linear-gradient(135deg,#E8F5E9,#F1F8E9);color:#2E7D32}.banner.red{background:linear-gradient(135deg,#FFEBEE,#FBE9E7);color:#C62828}.banner.yellow{background:linear-gradient(135deg,#FFF8E1,#FFF3E0);color:#E65100}
 .deal-head{padding:16px 18px;cursor:pointer}
-.title{font:700 17px/1.3 'Plus Jakarta Sans'}.stars{font:500 13px 'Plus Jakarta Sans';color:#f59e0b;margin-top:4px}
+.title{font:700 17px/1.3 'Plus Jakarta Sans';color:#2D2016}.stars{font:500 13px 'Plus Jakarta Sans';color:#FF8A65;margin-top:4px}
 .pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.pill{font:700 11px 'Plus Jakarta Sans';padding:4px 10px;border-radius:8px}
 .metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
-.metric{background:#f8f9fb;border-radius:12px;padding:10px 8px;text-align:center}
-.metric-label{font:600 10px 'Plus Jakarta Sans';color:#9ca3af;letter-spacing:.5px}.metric-value{font:700 20px 'IBM Plex Mono';margin-top:4px}
-.detail{padding:0 18px 18px;border-top:1px solid #f1f3f5}
-.section{background:#f8f9fb;border-radius:12px;padding:14px;margin:10px 0}
-.section-title{font:700 12px 'Plus Jakarta Sans';color:#2563eb;margin-bottom:8px}
-.check-row{font:500 14px/1.6 'Plus Jakarta Sans';color:#4b5563;padding:4px 0 4px 8px;border-left:3px solid #e8eaee;margin-bottom:4px}
-.check-row.pass{border-color:#22c55e;color:#15803d}.check-row.fail{border-color:#dc2626;color:#dc2626}.check-row.warn{border-color:#f59e0b;color:#92400e}
-.cost-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f3f5;font:500 14px 'Plus Jakarta Sans'}
-.cost-row .label{color:#6b7280}.cost-row .value{font:600 14px 'IBM Plex Mono'}
+.metric{background:#FBF8F6;border-radius:12px;padding:10px 8px;text-align:center;border:1px solid #E8E0D8}
+.metric-label{font:600 10px 'Plus Jakarta Sans';color:#7C6F64;letter-spacing:.5px;text-transform:uppercase}.metric-value{font:700 20px 'IBM Plex Mono';margin-top:4px}
+.detail{padding:0 18px 18px;border-top:1px solid #E8E0D8}
+.section{background:#FBF8F6;border-radius:12px;padding:14px;margin:10px 0;border:1px solid #E8E0D8}
+.section-title{font:700 12px 'Plus Jakarta Sans';color:#D84315;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.check-row{font:500 14px/1.6 'Plus Jakarta Sans';color:#7C6F64;padding:4px 0 4px 8px;border-left:3px solid #E8E0D8;margin-bottom:4px}
+.check-row.pass{border-color:#2E7D32;color:#2E7D32}.check-row.fail{border-color:#C62828;color:#C62828}.check-row.warn{border-color:#E65100;color:#E65100}
+.cost-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #E8E0D8;font:500 14px 'Plus Jakarta Sans'}
+.cost-row .label{color:#7C6F64}.cost-row .value{font:600 14px 'IBM Plex Mono'}
 .profit-row{display:flex;justify-content:space-between;padding:10px 0;margin-top:4px}
 .profit-row .label{font:800 16px 'Plus Jakarta Sans'}.profit-row .value{font:800 24px 'IBM Plex Mono'}
-.source{background:#fff;border:1px solid #e8eaee;border-radius:10px;padding:10px 14px;margin:4px 0;display:flex;justify-content:space-between;align-items:center}
-.source a{color:#2563eb;text-decoration:none;font:600 14px 'Plus Jakarta Sans'}.source .meta{font:500 12px 'Plus Jakarta Sans';color:#9ca3af}
-.risk{font:500 13px/1.5 'Plus Jakarta Sans';color:#d97706;padding:6px 0 6px 10px;border-left:3px solid #fde68a;margin:4px 0}
-.btn{padding:14px 20px;border-radius:12px;font:700 15px 'Plus Jakarta Sans';cursor:pointer;border:2px solid transparent;width:100%;text-align:center;display:block}
-.btn-blue{background:#2563eb;color:#fff;border-color:#2563eb;text-decoration:none}
-.btn-green{background:#fff;color:#22c55e;border-color:#22c55e}.btn-green.on{background:#22c55e;color:#fff}
-.btn-skip{background:#fff;color:#9ca3af;border-color:#e8eaee}.btn-skip.on{background:#fef2f2;color:#dc2626;border-color:#dc2626}
-.btn-outline{background:#fff;border:1.5px solid #e8eaee;color:#2563eb;padding:12px}
+.source{background:#fff;border:1px solid #E8E0D8;border-radius:10px;padding:10px 14px;margin:4px 0;display:flex;justify-content:space-between;align-items:center;transition:border-color .15s ease}
+.source:hover{border-color:#FF8A65}
+.source a{color:#D84315;text-decoration:none;font:600 14px 'Plus Jakarta Sans'}.source a:hover{color:#FF5722}.source .meta{font:500 12px 'Plus Jakarta Sans';color:#7C6F64}
+.risk{font:500 13px/1.5 'Plus Jakarta Sans';color:#E65100;padding:6px 0 6px 10px;border-left:3px solid #FFCC80;margin:4px 0}
+.btn{padding:14px 20px;border-radius:10px;font:700 15px 'Plus Jakarta Sans';cursor:pointer;border:2px solid transparent;width:100%;text-align:center;display:block;transition:all .15s ease}
+.btn-blue{background:linear-gradient(135deg,#D84315,#BF360C);color:#fff;border-color:#D84315;text-decoration:none;box-shadow:0 2px 8px rgba(216,67,21,.25)}.btn-blue:hover{box-shadow:0 4px 12px rgba(216,67,21,.35)}
+.btn-green{background:#fff;color:#2E7D32;border-color:#2E7D32}.btn-green.on{background:#2E7D32;color:#fff;box-shadow:0 2px 8px rgba(46,125,50,.25)}
+.btn-skip{background:#fff;color:#7C6F64;border-color:#E8E0D8}.btn-skip.on{background:#FFEBEE;color:#C62828;border-color:#C62828}
+.btn-outline{background:#fff;border:1.5px solid #E8E0D8;color:#D84315;padding:12px;border-radius:10px}.btn-outline:hover{border-color:#FF8A65;background:#FFF3E0}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .info-box{border-radius:12px;padding:12px 16px;margin:8px 0;font:600 14px/1.5 'Plus Jakarta Sans'}
-.info-green{background:#f0fdf4;color:#16a34a}.info-yellow{background:#fffbeb;color:#92400e}.info-blue{background:#eff6ff;color:#1d4ed8}
-.bar{height:6px;background:#e8eaee;border-radius:3px;overflow:hidden;margin:6px 0}.bar-fill{height:100%;border-radius:3px}
-.empty{text-align:center;padding:40px 20px;color:#9ca3af;font:500 15px 'Plus Jakarta Sans'}
-.inp{width:100%;padding:14px 16px;background:#f8f9fb;border:1.5px solid #e8eaee;border-radius:12px;color:#1a1d26;font:500 15px 'Plus Jakarta Sans';outline:none}
-input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:#e8eaee;border-radius:3px;outline:none;margin:8px 0}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#2563eb;box-shadow:0 2px 6px rgba(37,99,235,.3)}
-.status-bar{background:#fff;border:1px solid #e8eaee;border-radius:10px;padding:12px 16px;margin-bottom:12px;font:500 13px 'Plus Jakarta Sans';color:#6b7280;display:flex;justify-content:space-between}
+.info-green{background:linear-gradient(135deg,#E8F5E9,#F1F8E9);color:#2E7D32}.info-yellow{background:linear-gradient(135deg,#FFF8E1,#FFF3E0);color:#E65100}.info-blue{background:linear-gradient(135deg,#FFF3E0,#FBF8F6);color:#BF360C}
+.bar{height:6px;background:#E8E0D8;border-radius:3px;overflow:hidden;margin:6px 0}.bar-fill{height:100%;border-radius:3px}
+.empty{text-align:center;padding:40px 20px;color:#7C6F64;font:500 15px 'Plus Jakarta Sans'}
+.inp{width:100%;padding:14px 16px;background:#FBF8F6;border:1.5px solid #E8E0D8;border-radius:12px;color:#2D2016;font:500 15px 'Plus Jakarta Sans';outline:none;transition:border-color .15s ease}.inp:focus{border-color:#FF8A65;box-shadow:0 0 0 3px rgba(216,67,21,.08)}
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:rgba(255,255,255,.25);border-radius:3px;outline:none;margin:8px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2);border:0;cursor:pointer}
+.status-bar{background:#fff;border:1px solid #E8E0D8;border-radius:10px;padding:12px 16px;margin-bottom:12px;font:500 13px 'Plus Jakarta Sans';color:#7C6F64;display:flex;justify-content:space-between}
 </style>
 </head>
 <body>
 <div class="hdr">
  <div style="display:flex;justify-content:space-between;align-items:center">
-  <div><div style="font:800 22px 'Plus Jakarta Sans'">FBA Brain</div><div id="status" style="font:500 12px 'Plus Jakarta Sans';color:#9ca3af;margin-top:2px">Loading...</div></div>
-  <div style="text-align:right"><div style="font:500 11px 'Plus Jakarta Sans';color:#9ca3af">BUDGET</div><div id="budgetN" style="font:800 26px 'IBM Plex Mono';color:#22c55e">£200</div></div>
+  <div><div style="font:800 22px 'Plus Jakarta Sans';color:#fff">FBA Brain</div><div id="status" style="font:500 12px 'Plus Jakarta Sans';color:rgba(255,255,255,.7);margin-top:2px">Loading...</div></div>
+  <div style="text-align:right"><div style="font:500 11px 'Plus Jakarta Sans';color:rgba(255,255,255,.6)">BUDGET</div><div id="budgetN" style="font:800 26px 'IBM Plex Mono';color:#fff">&#163;200</div></div>
  </div>
  <input type="range" id="budgetR" min="100" max="2000" step="50" value="200">
  <div class="tabs"><button class="tab on" data-t="deals">Deals</button><button class="tab" data-t="alerts" id="atab">Alerts</button><button class="tab" data-t="stock">Stock</button><button class="tab" data-t="setup">Setup</button></div>
