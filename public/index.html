@@ -199,7 +199,20 @@ var APNAMES={ga:'gatwick',he:'heathrow',st:'stansted',lu:'luton',so:'southampton
 var APFULL={ga:'Gatwick',he:'Heathrow',st:'Stansted',lu:'Luton',so:'Southampton',ci:'London City',lo:'London Central'};
 var TC={horsham:{lat:51.0632,lon:-0.3234},lewes:{lat:50.874,lon:0.0131},brighton:{lat:50.8225,lon:-0.1372},worthing:{lat:50.8185,lon:-0.3788},burgess:{lat:50.9578,lon:-0.132},haywards:{lat:51.0024,lon:-0.0993},seaford:{lat:50.7716,lon:0.1028},crawley:{lat:51.1087,lon:-0.1872},eastgrinstead:{lat:51.1252,lon:-0.0076},uckfield:{lat:50.9688,lon:0.0983},eastbourne:{lat:50.768,lon:0.2904}};
 var _gc={};
-function geocode(a){if(_gc[a])return Promise.resolve(_gc[a]);return fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=gb&limit=1&q='+encodeURIComponent(a),{headers:{'Accept-Language':'en'}}).then(function(r){return r.json();}).then(function(d){var r=d&&d[0]?{lat:parseFloat(d[0].lat),lon:parseFloat(d[0].lon)}:null;if(r)_gc[a]=r;return r;});}
+var _placeCoords={};
+function geocode(a){
+  if(_gc[a])return Promise.resolve(_gc[a]);
+  if(_placeCoords[a])return Promise.resolve(_placeCoords[a]);
+  return fetch('/api/places/autocomplete?input='+encodeURIComponent(a)).then(function(r){return r.json();}).then(function(data){
+    if(data.predictions&&data.predictions.length>0){
+      return fetch('/api/places/details?place_id='+encodeURIComponent(data.predictions[0].place_id)).then(function(r2){return r2.json();}).then(function(d2){
+        if(d2.result&&d2.result.geometry){var r={lat:d2.result.geometry.location.lat,lon:d2.result.geometry.location.lng};_gc[a]=r;return r;}
+        return null;
+      });
+    }
+    return null;
+  }).catch(function(){return null;});
+}
 function haverMiles(a,b,c,d){var R=3958.8,dL=(c-a)*Math.PI/180,dn=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dn/2)*Math.sin(dn/2);return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 function nAP(s){if(!s)return null;var l=s.toLowerCase();if(l.includes('gatwick'))return 'ga';if(l.includes('heathrow'))return 'he';if(l.includes('stansted'))return 'st';if(l.includes('luton'))return 'lu';if(l.includes('southampton airport'))return 'so';if(l.includes('london city')||l.includes('city airport'))return 'ci';if(l.match(/\blondon\b/)&&!l.includes('city'))return 'lo';return null;}
 function nT(s){if(!s)return null;var l=s.toLowerCase();var m={'horsham':'horsham','lewes':'lewes','brighton':'brighton','hove':'brighton','crawley':'crawley','worthing':'worthing','haywards heath':'haywards','haywards':'haywards','burgess hill':'burgess','burgess':'burgess','east grinstead':'eastgrinstead','seaford':'seaford','uckfield':'uckfield','eastbourne':'eastbourne','polegate':'eastbourne','rh12':'horsham','rh13':'horsham','bn7':'lewes','bn8':'lewes','bn1':'brighton','bn2':'brighton','bn3':'brighton','rh10':'crawley','rh11':'crawley','bn11':'worthing','rh16':'haywards','rh15':'burgess','rh19':'eastgrinstead','bn25':'seaford','tn22':'uckfield','bn21':'eastbourne','bn22':'eastbourne','rh14':'horsham','bn5':'horsham','bn6':'haywards','bn26':'eastbourne','rh17':'haywards','tn21':'uckfield','tn20':'uckfield','bn18':'worthing','bn9':'lewes','bn43':'worthing','bn44':'worthing'};for(var k in m){if(l.includes(k))return m[k];}return null;}
@@ -228,38 +241,42 @@ function addrSearch(inp,sid){
     var apItems=AIRPORTS.filter(function(ap){
       return ap.name.toLowerCase().includes(vl)||ap.sub.toLowerCase().includes(vl);
     }).slice(0,3);
-    // Fetch address matches
-    fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=gb&limit=6&addressdetails=1&q='+encodeURIComponent(v),{headers:{'Accept-Language':'en','User-Agent':'WestmerePrivateHire/1.0'}})
+    // Fetch address matches via Google Places
+    fetch('/api/places/autocomplete?input='+encodeURIComponent(v))
     .then(function(r){return r.json();})
     .then(function(data){
       s.innerHTML='';
       // Airports first
       apItems.forEach(function(ap){
         var d=document.createElement('div');d.className='sug-item';
-        d.innerHTML='<div class="si-main">✈ '+ap.name+'</div><div class="si-sub">'+ap.sub+'</div>';
+        d.innerHTML='<div class="si-main">\u2708 '+ap.name+'</div><div class="si-sub">'+ap.sub+'</div>';
         d.onclick=function(){inp.value=ap.name;s.classList.remove('open');s.innerHTML='';checkFlight();doEstimate();};
         s.appendChild(d);
       });
-      // Address results
-      if(data&&data.length){
-        data.forEach(function(p){
-          var a=p.address||{},l1='',l2='';
-          var town=a.town||a.city||a.village||a.suburb||'';
-          var county=a.county||a.state_district||'';
-          var pc=a.postcode||'';
-          if(a.house_number&&a.road)l1=a.house_number+' '+a.road;
-          else if(a.road)l1=a.road;
-          else if(town)l1=town;
-          else{var pts=p.display_name.split(',');l1=pts[0].trim();}
-          if(!l2)l2=[town,pc].filter(Boolean).join(', ');
-          if(!l2&&county)l2=county;
-          var full=l2?l1+', '+l2:l1;
-          var d=document.createElement('div');d.className='sug-item';
-          d.innerHTML='<div class="si-main">'+l1+'</div>'+(l2?'<div class="si-sub">'+l2+'</div>':'');
-          d.onclick=function(){inp.value=full;s.classList.remove('open');s.innerHTML='';checkFlight();doEstimate();};
-          s.appendChild(d);
-        });
-      }
+      // Google Places results
+      var predictions=data.predictions||[];
+      predictions.slice(0,6).forEach(function(p){
+        var parts=p.description.split(',');
+        var main=parts[0].trim();
+        var secondary=parts.slice(1).join(',').trim();
+        var d=document.createElement('div');d.className='sug-item';
+        d.innerHTML='<div class="si-main">'+main+'</div>'+(secondary?'<div class="si-sub">'+secondary+'</div>':'');
+        d.onclick=function(){
+          inp.value=p.description;
+          s.classList.remove('open');s.innerHTML='';
+          // Fetch precise coordinates from place_id and cache them
+          fetch('/api/places/details?place_id='+encodeURIComponent(p.place_id))
+          .then(function(r2){return r2.json();})
+          .then(function(d2){
+            if(d2.result&&d2.result.geometry){
+              _placeCoords[p.description]={lat:d2.result.geometry.location.lat,lon:d2.result.geometry.location.lng};
+              _gc[p.description]={lat:d2.result.geometry.location.lat,lon:d2.result.geometry.location.lng};
+            }
+          }).catch(function(){});
+          checkFlight();doEstimate();
+        };
+        s.appendChild(d);
+      });
       if(s.children.length>0)s.classList.add('open');
       else s.classList.remove('open');
     })
@@ -268,26 +285,49 @@ function addrSearch(inp,sid){
       s.innerHTML='';
       apItems.forEach(function(ap){
         var d=document.createElement('div');d.className='sug-item';
-        d.innerHTML='<div class="si-main">✈ '+ap.name+'</div><div class="si-sub">'+ap.sub+'</div>';
+        d.innerHTML='<div class="si-main">\u2708 '+ap.name+'</div><div class="si-sub">'+ap.sub+'</div>';
         d.onclick=function(){inp.value=ap.name;s.classList.remove('open');s.innerHTML='';checkFlight();doEstimate();};
         s.appendChild(d);
       });
       if(s.children.length>0)s.classList.add('open');
     });
-  },350);
+  },300);
 }
 document.addEventListener('click',function(e){document.querySelectorAll('.sug-drop').forEach(function(s){if(!s.contains(e.target))s.classList.remove('open');});});
 function useLocation(){
   if(!navigator.geolocation)return;
   var inp=document.getElementById('b-from');
-  var orig=inp.placeholder;inp.placeholder='Getting location…';
+  var orig=inp.placeholder;inp.placeholder='Getting location\u2026';
   navigator.geolocation.getCurrentPosition(function(pos){
-    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+pos.coords.latitude+'&lon='+pos.coords.longitude+'&addressdetails=1',{headers:{'Accept-Language':'en'}})
-    .then(function(r){return r.json();}).then(function(d){
-      if(d&&d.address){var a=d.address,pts=[];if(a.house_number&&a.road)pts.push(a.house_number+' '+a.road);else if(a.road)pts.push(a.road);if(a.town)pts.push(a.town);else if(a.city)pts.push(a.city);else if(a.village)pts.push(a.village);if(a.postcode)pts.push(a.postcode);inp.value=pts.length?pts.join(', '):d.display_name;}
+    var lat=pos.coords.latitude,lng=pos.coords.longitude;
+    // Store coordinates immediately for fare calculation
+    _placeCoords['__currentLocation']={lat:lat,lon:lng};
+    // Reverse geocode via Google Places (geocode endpoint)
+    fetch('/api/places/autocomplete?input='+encodeURIComponent(lat+','+lng))
+    .then(function(r){return r.json();}).then(function(data){
+      if(data.predictions&&data.predictions.length>0){
+        var desc=data.predictions[0].description;
+        inp.value=desc;
+        _gc[desc]={lat:lat,lon:lng};
+        _placeCoords[desc]={lat:lat,lon:lng};
+        // Also get proper formatted address
+        fetch('/api/places/details?place_id='+encodeURIComponent(data.predictions[0].place_id))
+        .then(function(r2){return r2.json();}).then(function(d2){
+          if(d2.result&&d2.result.formatted_address){
+            inp.value=d2.result.formatted_address;
+            _gc[d2.result.formatted_address]={lat:lat,lon:lng};
+            _placeCoords[d2.result.formatted_address]={lat:lat,lon:lng};
+          }
+        }).catch(function(){});
+      } else {
+        inp.value=lat.toFixed(5)+', '+lng.toFixed(5);
+      }
       inp.placeholder=orig;checkFlight();doEstimate();
-    }).catch(function(){inp.placeholder=orig;});
-  },function(){inp.placeholder='Location unavailable – type your address';setTimeout(function(){inp.placeholder=orig;},3500);},{timeout:8000});
+    }).catch(function(){
+      inp.value=lat.toFixed(5)+', '+lng.toFixed(5);
+      inp.placeholder=orig;checkFlight();doEstimate();
+    });
+  },function(){inp.placeholder='Location unavailable \u2013 type your address';setTimeout(function(){inp.placeholder=orig;},3500);},{timeout:8000});
 }
 function checkFlight(){
   var from=document.getElementById('b-from').value;
