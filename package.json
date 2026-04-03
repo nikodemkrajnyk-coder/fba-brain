@@ -1,7 +1,7 @@
 {
-  "name": "westmere-private-hire",
-  "version": "1.0.0",
-  "description": "Westmere Private Hire - Sussex Airport Transfers",
+  "name": "fba-brain",
+  "version": "3.0.0",
+  "description": "FBA Brain - Amazon UK Arbitrage Engine",
   "main": "desktop.js",
   "scripts": {
     "start": "node server.js",
@@ -19,6 +19,8 @@
   "dependencies": {
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "googleapis": "^131.0.0",
+    "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
